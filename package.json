@@ -1,5 +1,72 @@
 {
-  "dependencies": {
-    "claude-flow": "^2.7.47"
-  }
+  "name": "agentics-deployment-intent",
+  "version": "1.0.0",
+  "description": "Semantic bridge between RuvVector simulations and deployment infrastructure - deployment intent management with validation, governance, and provenance tracking",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "agentics",
+    "deployment",
+    "intent",
+    "simulation",
+    "governance",
+    "provenance",
+    "validation",
+    "ruvvector",
+    "infrastructure",
+    "semantic-bridge"
+  ],
+  "author": "Agentics Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./schema": {
+      "types": "./dist/schema/index.d.ts",
+      "import": "./dist/schema/index.js"
+    },
+    "./validation": {
+      "types": "./dist/validation/index.d.ts",
+      "import": "./dist/validation/index.js"
+    },
+    "./promotion": {
+      "types": "./dist/promotion/index.d.ts",
+      "import": "./dist/promotion/index.js"
+    },
+    "./provenance": {
+      "types": "./dist/provenance/index.d.ts",
+      "import": "./dist/provenance/index.js"
+    },
+    "./governance": {
+      "types": "./dist/governance/index.d.ts",
+      "import": "./dist/governance/index.js"
+    },
+    "./export": {
+      "types": "./dist/export/index.d.ts",
+      "import": "./dist/export/index.js"
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.3",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {}
 }
