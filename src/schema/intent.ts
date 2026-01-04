@@ -31,6 +31,7 @@ import type {
   IntegrationTouchpointCollection,
   RiskToleranceSpecification,
 } from './integration.js';
+import type { ERPCapabilityRequirements } from './erp.js';
 
 /**
  * Complete Deployment Intent document.
@@ -202,6 +203,24 @@ export interface DeploymentIntent {
    * Used for authenticity verification and non-repudiation.
    */
   readonly signatures?: SignatureCollection;
+
+  /**
+   * Optional ERP capability requirements.
+   *
+   * Declares required ERP surface capabilities from the erp-surface repository.
+   * These are declarative requirements only - they specify what capabilities
+   * are needed without prescribing vendors, implementations, or environment
+   * configuration.
+   *
+   * ERP references are treated as declarative requirements:
+   * - No execution logic or adapters are included
+   * - No vendor-specific details are specified
+   * - Binding to implementations happens at deployment time
+   *
+   * The presence of this field does not affect intent promotion, validation
+   * rules (other than ERP-specific validation), or provenance tracking.
+   */
+  readonly erpCapabilityRequirements?: ERPCapabilityRequirements;
 
   /**
    * Optional extension data for custom attributes.

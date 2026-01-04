@@ -131,4 +131,5 @@ export {
   validateProvenanceChain,
   validateParentIntentReference,
   validateSupersedesReference,
+  validateERPCapabilityReferences,
 } from './integrity.js';

@@ -12,6 +12,8 @@
  */
 
 import type { DeploymentIntent, ZoneConnection, ProvenanceRecord } from '../schema/types.js';
+import type { ERPCapabilityRequirements, ERPOperationReference } from '../schema/erp.js';
+import { isValidCapabilityIdFormat } from '../schema/erp.js';
 import {
   ValidationFinding,
   ValidationSeverity,
@@ -717,6 +719,404 @@ function validateSupersedesReference(intent: DeploymentIntent): ValidationFindin
 }
 
 // =============================================================================
+// ERP CAPABILITY REFERENCE VALIDATION
+// =============================================================================
+
+/**
+ * Validate ERP capability references within the deployment intent.
+ *
+ * Checks:
+ * - Capability IDs follow the expected format (domain/category/capability)
+ * - Version ranges are valid (min <= max when max is specified)
+ * - Dependency references are valid (both capabilities exist)
+ * - No circular dependencies
+ * - Required operations have valid structure
+ *
+ * @param intent - The deployment intent to validate
+ * @returns Array of findings for ERP capability reference issues
+ */
+function validateERPCapabilityReferences(intent: DeploymentIntent): ValidationFinding[] {
+  const findings: ValidationFinding[] = [];
+
+  // Access through the DeploymentIntent extension
+  const erpRequirements = (intent as unknown as { erpCapabilityRequirements?: ERPCapabilityRequirements }).erpCapabilityRequirements;
+
+  if (!erpRequirements) {
+    // ERP requirements are optional, so this is not an error
+    return findings;
+  }
+
+  const basePath = 'erpCapabilityRequirements';
+
+  // Validate specification version format
+  if (erpRequirements.specificationVersion) {
+    const semVerRegex = /^\d+\.\d+\.\d+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$/;
+    if (!semVerRegex.test(erpRequirements.specificationVersion)) {
+      findings.push(
+        createIntegrityFinding(
+          `${basePath}.specificationVersion`,
+          'INVALID_ERP_SPEC_VERSION',
+          'ERP capability requirements specification version is not a valid semantic version',
+          ValidationSeverity.ERROR,
+          {
+            actual: erpRequirements.specificationVersion,
+            expected: 'Semantic version format (e.g., 1.0.0)',
+            suggestion: 'Use semantic versioning format for the specification version',
+          }
+        )
+      );
+    }
+  }
+
+  // Validate capabilities array
+  const capabilities = erpRequirements.capabilities;
+  if (!Array.isArray(capabilities)) {
+    return findings;
+  }
+
+  // Build a set of capability IDs for dependency validation
+  const capabilityIds = new Set<string>();
+  const referenceIds = new Set<string>();
+
+  capabilities.forEach((capability, index) => {
+    const capPath = `${basePath}.capabilities[${index}]`;
+
+    // Check for duplicate reference IDs
+    if (capability.referenceId) {
+      if (referenceIds.has(capability.referenceId)) {
+        findings.push(
+          createIntegrityFinding(
+            `${capPath}.referenceId`,
+            'DUPLICATE_ERP_REFERENCE_ID',
+            `Duplicate ERP capability reference ID: ${capability.referenceId}`,
+            ValidationSeverity.ERROR,
+            {
+              actual: capability.referenceId,
+              suggestion: 'Each ERP capability reference must have a unique referenceId',
+            }
+          )
+        );
+      } else {
+        referenceIds.add(capability.referenceId);
+      }
+    }
+
+    // Validate capability ID format
+    if (capability.capabilityId) {
+      capabilityIds.add(capability.capabilityId);
+
+      if (!isValidCapabilityIdFormat(capability.capabilityId)) {
+        findings.push(
+          createIntegrityFinding(
+            `${capPath}.capabilityId`,
+            'INVALID_ERP_CAPABILITY_ID_FORMAT',
+            `ERP capability ID does not follow expected format`,
+            ValidationSeverity.ERROR,
+            {
+              actual: capability.capabilityId,
+              expected: 'domain/category/capability format (e.g., finance/accounts-payable/invoice-processing)',
+              suggestion: 'Use the canonical capability ID format from the erp-surface repository',
+            }
+          )
+        );
+      }
+    }
+
+    // Validate version range
+    if (capability.minimumVersion && capability.maximumVersion) {
+      const minParts = capability.minimumVersion.split('.').map(Number);
+      const maxParts = capability.maximumVersion.split('.').map(Number);
+
+      // Simple semantic version comparison (major.minor.patch)
+      const minVersion = minParts[0] * 10000 + (minParts[1] || 0) * 100 + (minParts[2] || 0);
+      const maxVersion = maxParts[0] * 10000 + (maxParts[1] || 0) * 100 + (maxParts[2] || 0);
+
+      if (minVersion > maxVersion) {
+        findings.push(
+          createIntegrityFinding(
+            `${capPath}.maximumVersion`,
+            'INVALID_ERP_VERSION_RANGE',
+            `ERP capability maximum version is less than minimum version`,
+            ValidationSeverity.ERROR,
+            {
+              actual: `min=${capability.minimumVersion}, max=${capability.maximumVersion}`,
+              suggestion: 'Ensure maximumVersion is greater than or equal to minimumVersion',
+            }
+          )
+        );
+      }
+    }
+
+    // Validate criticality value
+    const validCriticalities = ['CRITICAL', 'REQUIRED', 'PREFERRED', 'OPTIONAL'];
+    if (capability.criticality && !validCriticalities.includes(capability.criticality)) {
+      findings.push(
+        createIntegrityFinding(
+          `${capPath}.criticality`,
+          'INVALID_ERP_CRITICALITY',
+          `Invalid ERP capability criticality level`,
+          ValidationSeverity.ERROR,
+          {
+            actual: capability.criticality,
+            expected: validCriticalities.join(', '),
+            suggestion: 'Use one of the valid criticality levels',
+          }
+        )
+      );
+    }
+
+    // Validate required operations
+    if (Array.isArray(capability.requiredOperations)) {
+      const operationIds = new Set<string>();
+
+      capability.requiredOperations.forEach((op: ERPOperationReference, opIndex: number) => {
+        const opPath = `${capPath}.requiredOperations[${opIndex}]`;
+
+        // Check for duplicate operation IDs within this capability
+        if (op.operationId) {
+          if (operationIds.has(op.operationId)) {
+            findings.push(
+              createIntegrityFinding(
+                `${opPath}.operationId`,
+                'DUPLICATE_ERP_OPERATION_ID',
+                `Duplicate operation ID within capability: ${op.operationId}`,
+                ValidationSeverity.WARNING,
+                {
+                  suggestion: 'Each operation should be referenced only once per capability',
+                }
+              )
+            );
+          } else {
+            operationIds.add(op.operationId);
+          }
+        }
+
+        // Validate operation frequency if specified
+        if (op.expectedFrequency) {
+          const validPeriods = ['SECOND', 'MINUTE', 'HOUR', 'DAY', 'WEEK', 'MONTH'];
+          if (op.expectedFrequency.period && !validPeriods.includes(op.expectedFrequency.period)) {
+            findings.push(
+              createIntegrityFinding(
+                `${opPath}.expectedFrequency.period`,
+                'INVALID_ERP_FREQUENCY_PERIOD',
+                `Invalid frequency period for ERP operation`,
+                ValidationSeverity.ERROR,
+                {
+                  actual: op.expectedFrequency.period,
+                  expected: validPeriods.join(', '),
+                }
+              )
+            );
+          }
+
+          if (op.expectedFrequency.averageInvocationsPerPeriod !== undefined &&
+              op.expectedFrequency.peakInvocationsPerPeriod !== undefined &&
+              op.expectedFrequency.averageInvocationsPerPeriod > op.expectedFrequency.peakInvocationsPerPeriod) {
+            findings.push(
+              createIntegrityFinding(
+                `${opPath}.expectedFrequency`,
+                'INVALID_ERP_FREQUENCY_VALUES',
+                `Average invocations cannot exceed peak invocations`,
+                ValidationSeverity.ERROR,
+                {
+                  actual: `avg=${op.expectedFrequency.averageInvocationsPerPeriod}, peak=${op.expectedFrequency.peakInvocationsPerPeriod}`,
+                }
+              )
+            );
+          }
+        }
+      });
+    }
+
+    // Validate data requirements if specified
+    if (capability.dataRequirements) {
+      const validClassifications = ['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'RESTRICTED', 'REGULATED'];
+      if (capability.dataRequirements.dataClassification &&
+          !validClassifications.includes(capability.dataRequirements.dataClassification)) {
+        findings.push(
+          createIntegrityFinding(
+            `${capPath}.dataRequirements.dataClassification`,
+            'INVALID_ERP_DATA_CLASSIFICATION',
+            `Invalid ERP data classification level`,
+            ValidationSeverity.ERROR,
+            {
+              actual: capability.dataRequirements.dataClassification,
+              expected: validClassifications.join(', '),
+            }
+          )
+        );
+      }
+    }
+  });
+
+  // Validate capability dependencies
+  if (Array.isArray(erpRequirements.capabilityDependencies)) {
+    erpRequirements.capabilityDependencies.forEach((dep, index) => {
+      const depPath = `${basePath}.capabilityDependencies[${index}]`;
+
+      // Check that both capability IDs in the dependency exist
+      if (dep.dependentCapabilityId && !capabilityIds.has(dep.dependentCapabilityId)) {
+        findings.push(
+          createIntegrityFinding(
+            `${depPath}.dependentCapabilityId`,
+            'INVALID_ERP_DEPENDENCY_REFERENCE',
+            `Dependency references non-existent capability: ${dep.dependentCapabilityId}`,
+            ValidationSeverity.ERROR,
+            {
+              actual: dep.dependentCapabilityId,
+              expected: `One of: ${Array.from(capabilityIds).join(', ') || 'no capabilities defined'}`,
+              suggestion: 'Ensure the dependent capability is listed in capabilities array',
+            }
+          )
+        );
+      }
+
+      if (dep.requiredCapabilityId && !capabilityIds.has(dep.requiredCapabilityId)) {
+        findings.push(
+          createIntegrityFinding(
+            `${depPath}.requiredCapabilityId`,
+            'INVALID_ERP_DEPENDENCY_REFERENCE',
+            `Dependency references non-existent required capability: ${dep.requiredCapabilityId}`,
+            ValidationSeverity.ERROR,
+            {
+              actual: dep.requiredCapabilityId,
+              expected: `One of: ${Array.from(capabilityIds).join(', ') || 'no capabilities defined'}`,
+              suggestion: 'Ensure the required capability is listed in capabilities array',
+            }
+          )
+        );
+      }
+
+      // Check for self-dependencies
+      if (dep.dependentCapabilityId && dep.requiredCapabilityId &&
+          dep.dependentCapabilityId === dep.requiredCapabilityId) {
+        findings.push(
+          createIntegrityFinding(
+            depPath,
+            'SELF_REFERENTIAL_ERP_DEPENDENCY',
+            `Capability cannot depend on itself: ${dep.dependentCapabilityId}`,
+            ValidationSeverity.ERROR,
+            {
+              suggestion: 'Remove the self-referential dependency',
+            }
+          )
+        );
+      }
+
+      // Validate dependency type
+      const validDependencyTypes = ['REQUIRES', 'ENHANCES', 'DATA_FLOW', 'SEQUENCED'];
+      if (dep.dependencyType && !validDependencyTypes.includes(dep.dependencyType)) {
+        findings.push(
+          createIntegrityFinding(
+            `${depPath}.dependencyType`,
+            'INVALID_ERP_DEPENDENCY_TYPE',
+            `Invalid ERP capability dependency type`,
+            ValidationSeverity.ERROR,
+            {
+              actual: dep.dependencyType,
+              expected: validDependencyTypes.join(', '),
+            }
+          )
+        );
+      }
+    });
+
+    // Check for circular dependencies (simple cycle detection)
+    const dependencyGraph = new Map<string, Set<string>>();
+    erpRequirements.capabilityDependencies.forEach((dep) => {
+      if (dep.dependentCapabilityId && dep.requiredCapabilityId) {
+        if (!dependencyGraph.has(dep.dependentCapabilityId)) {
+          dependencyGraph.set(dep.dependentCapabilityId, new Set());
+        }
+        dependencyGraph.get(dep.dependentCapabilityId)!.add(dep.requiredCapabilityId);
+      }
+    });
+
+    // Simple DFS-based cycle detection
+    const visited = new Set<string>();
+    const inStack = new Set<string>();
+
+    function hasCycle(node: string): boolean {
+      if (inStack.has(node)) return true;
+      if (visited.has(node)) return false;
+
+      visited.add(node);
+      inStack.add(node);
+
+      const dependencies = dependencyGraph.get(node);
+      if (dependencies) {
+        for (const dep of dependencies) {
+          if (hasCycle(dep)) return true;
+        }
+      }
+
+      inStack.delete(node);
+      return false;
+    }
+
+    for (const node of dependencyGraph.keys()) {
+      if (hasCycle(node)) {
+        findings.push(
+          createIntegrityFinding(
+            `${basePath}.capabilityDependencies`,
+            'CIRCULAR_ERP_DEPENDENCY',
+            `Circular dependency detected involving capability: ${node}`,
+            ValidationSeverity.ERROR,
+            {
+              suggestion: 'Review and remove circular dependencies between ERP capabilities',
+            }
+          )
+        );
+        break; // Only report once
+      }
+    }
+  }
+
+  // Validate global constraints if specified
+  if (erpRequirements.globalConstraints) {
+    const gc = erpRequirements.globalConstraints;
+    const gcPath = `${basePath}.globalConstraints`;
+
+    if (gc.minimumAvailabilityPercent !== undefined) {
+      if (gc.minimumAvailabilityPercent < 0 || gc.minimumAvailabilityPercent > 100) {
+        findings.push(
+          createIntegrityFinding(
+            `${gcPath}.minimumAvailabilityPercent`,
+            'INVALID_ERP_AVAILABILITY_PERCENT',
+            `Minimum availability percent must be between 0 and 100`,
+            ValidationSeverity.ERROR,
+            {
+              actual: String(gc.minimumAvailabilityPercent),
+              expected: '0-100',
+            }
+          )
+        );
+      }
+    }
+
+    if (gc.maxDataClassification) {
+      const validClassifications = ['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'RESTRICTED', 'REGULATED'];
+      if (!validClassifications.includes(gc.maxDataClassification)) {
+        findings.push(
+          createIntegrityFinding(
+            `${gcPath}.maxDataClassification`,
+            'INVALID_ERP_MAX_CLASSIFICATION',
+            `Invalid global maximum data classification`,
+            ValidationSeverity.ERROR,
+            {
+              actual: gc.maxDataClassification,
+              expected: validClassifications.join(', '),
+            }
+          )
+        );
+      }
+    }
+  }
+
+  return findings;
+}
+
+// =============================================================================
 // COMPOSITE REFERENTIAL INTEGRITY VALIDATION
 // =============================================================================
 
@@ -729,6 +1129,7 @@ function validateSupersedesReference(intent: DeploymentIntent): ValidationFindin
  * 3. Contract references (systems, providers)
  * 4. Provenance chain linkage
  * 5. Parent/supersedes intent references
+ * 6. ERP capability references (format, dependencies, constraints)
  *
  * The function is:
  * - Deterministic: Same input produces same output
@@ -746,6 +1147,7 @@ export function validateReferentialIntegrity(intent: DeploymentIntent): Integrit
   const provenanceFindings = validateProvenanceChain(intent);
   const parentFindings = validateParentIntentReference(intent);
   const supersedesFindings = validateSupersedesReference(intent);
+  const erpFindings = validateERPCapabilityReferences(intent);
 
   // Combine all findings
   const allViolations = [
@@ -755,6 +1157,7 @@ export function validateReferentialIntegrity(intent: DeploymentIntent): Integrit
     ...provenanceFindings,
     ...parentFindings,
     ...supersedesFindings,
+    ...erpFindings,
   ];
 
   return {
@@ -770,4 +1173,5 @@ export {
   validateProvenanceChain,
   validateParentIntentReference,
   validateSupersedesReference,
+  validateERPCapabilityReferences,
 };

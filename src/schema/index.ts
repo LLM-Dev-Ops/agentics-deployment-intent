@@ -406,3 +406,35 @@ export {
   extractMetadata,
   createSummary,
 } from './intent.js';
+
+// =============================================================================
+// ERP Capability Reference Types
+// =============================================================================
+
+export type {
+  ERPCapabilityReference,
+  ERPCapabilityCriticality,
+  ERPOperationReference,
+  ERPOperationFrequency,
+  ERPFrequencyPeriod,
+  ERPDataRequirement,
+  ERPEntityReference,
+  ERPDataClassification,
+  ERPDataFreshness,
+  ERPFreshnessUnit,
+  ERPUsageConstraints,
+  ERPRateLimit,
+  ERPAccessWindow,
+  ERPDayOfWeek,
+  ERPCapabilityRequirements,
+  ERPGlobalConstraints,
+  ERPCapabilityDependency,
+  ERPDependencyType,
+} from './erp.js';
+
+export {
+  isERPCapabilityReference,
+  isERPCapabilityRequirements,
+  isValidCapabilityIdFormat,
+  validateCapabilityReferences,
+} from './erp.js';

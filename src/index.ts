@@ -108,6 +108,26 @@ export type {
   IntegrationTouchpoint,
   RiskToleranceSpecification,
 
+  // ERP Capability Reference types
+  ERPCapabilityReference,
+  ERPCapabilityCriticality,
+  ERPOperationReference,
+  ERPOperationFrequency,
+  ERPFrequencyPeriod,
+  ERPDataRequirement,
+  ERPEntityReference,
+  ERPDataClassification,
+  ERPDataFreshness,
+  ERPFreshnessUnit,
+  ERPUsageConstraints,
+  ERPRateLimit,
+  ERPAccessWindow,
+  ERPDayOfWeek,
+  ERPCapabilityRequirements,
+  ERPGlobalConstraints,
+  ERPCapabilityDependency,
+  ERPDependencyType,
+
   // Common types
   UUID,
   SemVer,
@@ -127,6 +147,11 @@ export {
   TERMINAL_STATES,
   IMMUTABLE_STATES,
   EXPORTABLE_STATES,
+  // ERP validation utilities
+  isERPCapabilityReference,
+  isERPCapabilityRequirements,
+  isValidCapabilityIdFormat,
+  validateCapabilityReferences,
 } from './schema/index.js';
 
 // =============================================================================
@@ -156,6 +181,7 @@ export {
   validateGovernanceCompliance,
   validateRiskThresholds,
   validateBusinessRules,
+  validateERPCapabilityReferences,
   ValidationErrorCodes,
 } from './validation/index.js';
 
