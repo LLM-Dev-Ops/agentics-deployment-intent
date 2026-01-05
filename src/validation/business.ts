@@ -1070,16 +1070,557 @@ export function validateRiskThresholds(intent: DeploymentIntent): ValidationFind
 }
 
 // =============================================================================
-// COMPOSITE BUSINESS RULE VALIDATION
+// SIMULATION CONTEXT VALIDATION
+// =============================================================================
+
+/**
+ * Validate simulation context constraints.
+ *
+ * CRITICAL: Ensures simulation context has required guardrail flags set correctly.
+ * These flags are mandatory safeguards that prevent simulation data from being
+ * interpreted as authorization for production operations.
+ *
+ * Checks:
+ * - isInformationalOnly is true
+ * - doesNotAuthorizeExecution is true
+ * - Required fields are present
+ * - Disclaimer is set
+ *
+ * @param intent - The deployment intent to validate
+ * @returns Array of findings for simulation context violations
+ */
+export function validateSimulationContext(intent: DeploymentIntent): ValidationFinding[] {
+  const findings: ValidationFinding[] = [];
+
+  const intentAny = intent as unknown as Record<string, unknown>;
+  const simulationContext = intentAny['simulationContext'] as Record<string, unknown> | undefined;
+
+  if (!simulationContext) {
+    return findings;
+  }
+
+  // CRITICAL: Validate isInformationalOnly flag
+  if (simulationContext['isInformationalOnly'] !== true) {
+    findings.push(
+      createBusinessFinding(
+        'simulationContext.isInformationalOnly',
+        'SIMULATION_GUARDRAIL_MISSING',
+        'Simulation context MUST have isInformationalOnly set to true. ' +
+        'This is a critical guardrail that prevents simulation data from authorizing operations.',
+        ValidationSeverity.ERROR,
+        BusinessRuleCategory.GOVERNANCE,
+        {
+          expected: 'true',
+          actual: String(simulationContext['isInformationalOnly']),
+        }
+      )
+    );
+  }
+
+  // CRITICAL: Validate doesNotAuthorizeExecution flag
+  if (simulationContext['doesNotAuthorizeExecution'] !== true) {
+    findings.push(
+      createBusinessFinding(
+        'simulationContext.doesNotAuthorizeExecution',
+        'SIMULATION_GUARDRAIL_MISSING',
+        'Simulation context MUST have doesNotAuthorizeExecution set to true. ' +
+        'Simulation outcomes can NEVER authorize production execution.',
+        ValidationSeverity.ERROR,
+        BusinessRuleCategory.GOVERNANCE,
+        {
+          expected: 'true',
+          actual: String(simulationContext['doesNotAuthorizeExecution']),
+        }
+      )
+    );
+  }
+
+  // Validate contextType
+  if (simulationContext['contextType'] !== 'SIMULATION') {
+    findings.push(
+      createBusinessFinding(
+        'simulationContext.contextType',
+        'INVALID_CONTEXT_TYPE',
+        'Simulation context must have contextType set to "SIMULATION"',
+        ValidationSeverity.ERROR,
+        BusinessRuleCategory.GOVERNANCE,
+        {
+          expected: 'SIMULATION',
+          actual: String(simulationContext['contextType']),
+        }
+      )
+    );
+  }
+
+  // Validate disclaimer is present
+  if (!simulationContext['disclaimer'] || typeof simulationContext['disclaimer'] !== 'string') {
+    findings.push(
+      createBusinessFinding(
+        'simulationContext.disclaimer',
+        'MISSING_SIMULATION_DISCLAIMER',
+        'Simulation context must include a disclaimer explaining informational nature',
+        ValidationSeverity.WARNING,
+        BusinessRuleCategory.GOVERNANCE,
+        {
+          suggestion: 'Add a disclaimer explaining that simulation data is informational only',
+        }
+      )
+    );
+  }
+
+  // Validate simulation reference
+  const simRef = simulationContext['simulationReference'] as Record<string, unknown> | undefined;
+  if (!simRef) {
+    findings.push(
+      createBusinessFinding(
+        'simulationContext.simulationReference',
+        'MISSING_SIMULATION_REFERENCE',
+        'Simulation context must include a reference to the source simulation',
+        ValidationSeverity.ERROR,
+        BusinessRuleCategory.GOVERNANCE
+      )
+    );
+  } else {
+    if (!simRef['runId']) {
+      findings.push(
+        createBusinessFinding(
+          'simulationContext.simulationReference.runId',
+          'MISSING_SIMULATION_RUN_ID',
+          'Simulation reference must include the simulation run ID for traceability',
+          ValidationSeverity.ERROR,
+          BusinessRuleCategory.GOVERNANCE
+        )
+      );
+    }
+  }
+
+  // Validate assumptions are present
+  const assumptions = simulationContext['assumptions'] as Record<string, unknown> | undefined;
+  if (!assumptions) {
+    findings.push(
+      createBusinessFinding(
+        'simulationContext.assumptions',
+        'MISSING_SIMULATION_ASSUMPTIONS',
+        'Simulation context should document assumptions for transparency',
+        ValidationSeverity.WARNING,
+        BusinessRuleCategory.GOVERNANCE,
+        {
+          suggestion: 'Include assumptions that underlie the simulation outcomes',
+        }
+      )
+    );
+  }
+
+  return findings;
+}
+
+// =============================================================================
+// ROI CONTEXT VALIDATION
+// =============================================================================
+
+/**
+ * Validate ROI context constraints.
+ *
+ * CRITICAL: Ensures ROI context has required guardrail flags set correctly.
+ * These flags are mandatory safeguards that prevent financial projections from
+ * being interpreted as authorization for production operations.
+ *
+ * Checks:
+ * - isInformationalOnly is true
+ * - doesNotAuthorizeExecution is true
+ * - projectionsAreEstimates is true
+ * - Required fields are present
+ * - Disclaimer is set
+ *
+ * @param intent - The deployment intent to validate
+ * @returns Array of findings for ROI context violations
+ */
+export function validateROIContext(intent: DeploymentIntent): ValidationFinding[] {
+  const findings: ValidationFinding[] = [];
+
+  const intentAny = intent as unknown as Record<string, unknown>;
+  const roiContext = intentAny['roiContext'] as Record<string, unknown> | undefined;
+
+  if (!roiContext) {
+    return findings;
+  }
+
+  // CRITICAL: Validate isInformationalOnly flag
+  if (roiContext['isInformationalOnly'] !== true) {
+    findings.push(
+      createBusinessFinding(
+        'roiContext.isInformationalOnly',
+        'ROI_GUARDRAIL_MISSING',
+        'ROI context MUST have isInformationalOnly set to true. ' +
+        'Financial projections are for decision support only, not authorization.',
+        ValidationSeverity.ERROR,
+        BusinessRuleCategory.GOVERNANCE,
+        {
+          expected: 'true',
+          actual: String(roiContext['isInformationalOnly']),
+        }
+      )
+    );
+  }
+
+  // CRITICAL: Validate doesNotAuthorizeExecution flag
+  if (roiContext['doesNotAuthorizeExecution'] !== true) {
+    findings.push(
+      createBusinessFinding(
+        'roiContext.doesNotAuthorizeExecution',
+        'ROI_GUARDRAIL_MISSING',
+        'ROI context MUST have doesNotAuthorizeExecution set to true. ' +
+        'ROI analysis can NEVER authorize production execution.',
+        ValidationSeverity.ERROR,
+        BusinessRuleCategory.GOVERNANCE,
+        {
+          expected: 'true',
+          actual: String(roiContext['doesNotAuthorizeExecution']),
+        }
+      )
+    );
+  }
+
+  // CRITICAL: Validate projectionsAreEstimates flag
+  if (roiContext['projectionsAreEstimates'] !== true) {
+    findings.push(
+      createBusinessFinding(
+        'roiContext.projectionsAreEstimates',
+        'ROI_GUARDRAIL_MISSING',
+        'ROI context MUST have projectionsAreEstimates set to true. ' +
+        'All financial projections must be acknowledged as estimates.',
+        ValidationSeverity.ERROR,
+        BusinessRuleCategory.GOVERNANCE,
+        {
+          expected: 'true',
+          actual: String(roiContext['projectionsAreEstimates']),
+        }
+      )
+    );
+  }
+
+  // Validate contextType
+  if (roiContext['contextType'] !== 'ROI') {
+    findings.push(
+      createBusinessFinding(
+        'roiContext.contextType',
+        'INVALID_CONTEXT_TYPE',
+        'ROI context must have contextType set to "ROI"',
+        ValidationSeverity.ERROR,
+        BusinessRuleCategory.GOVERNANCE,
+        {
+          expected: 'ROI',
+          actual: String(roiContext['contextType']),
+        }
+      )
+    );
+  }
+
+  // Validate disclaimer is present
+  if (!roiContext['disclaimer'] || typeof roiContext['disclaimer'] !== 'string') {
+    findings.push(
+      createBusinessFinding(
+        'roiContext.disclaimer',
+        'MISSING_ROI_DISCLAIMER',
+        'ROI context must include a disclaimer explaining projections are estimates',
+        ValidationSeverity.WARNING,
+        BusinessRuleCategory.GOVERNANCE,
+        {
+          suggestion: 'Add a disclaimer explaining that ROI projections are estimates only',
+        }
+      )
+    );
+  }
+
+  // Validate analysis reference
+  const analysisRef = roiContext['analysisReference'] as Record<string, unknown> | undefined;
+  if (!analysisRef) {
+    findings.push(
+      createBusinessFinding(
+        'roiContext.analysisReference',
+        'MISSING_ROI_ANALYSIS_REFERENCE',
+        'ROI context must include a reference to the source analysis',
+        ValidationSeverity.ERROR,
+        BusinessRuleCategory.GOVERNANCE
+      )
+    );
+  } else {
+    if (!analysisRef['analysisId']) {
+      findings.push(
+        createBusinessFinding(
+          'roiContext.analysisReference.analysisId',
+          'MISSING_ROI_ANALYSIS_ID',
+          'ROI analysis reference must include the analysis ID for traceability',
+          ValidationSeverity.ERROR,
+          BusinessRuleCategory.GOVERNANCE
+        )
+      );
+    }
+  }
+
+  // Validate financial metrics are present with confidence levels
+  const financialMetrics = roiContext['financialMetrics'] as Record<string, unknown> | undefined;
+  if (financialMetrics) {
+    // Validate confidence is specified
+    const projections = roiContext['projections'] as Record<string, unknown> | undefined;
+    if (projections && !projections['overallConfidence']) {
+      findings.push(
+        createBusinessFinding(
+          'roiContext.projections.overallConfidence',
+          'MISSING_CONFIDENCE_LEVEL',
+          'ROI projections should include an overall confidence level',
+          ValidationSeverity.WARNING,
+          BusinessRuleCategory.GOVERNANCE,
+          {
+            suggestion: 'Specify confidence level (HIGH, MEDIUM, LOW, SPECULATIVE) for projections',
+          }
+        )
+      );
+    }
+  }
+
+  return findings;
+}
+
+// =============================================================================
+// INTENT CLASSIFICATION VALIDATION
+// =============================================================================
+
+/**
+ * Validate intent classification constraints.
+ *
+ * CRITICAL: Ensures the intent classification is properly configured to
+ * enforce the separation between SIMULATED and EXECUTABLE intents.
+ *
+ * Checks:
+ * - Classification is present and valid
+ * - SIMULATED intents have correct restrictions
+ * - EXECUTABLE intents have proper authorization
+ * - Capabilities match the intent type
+ *
+ * @param intent - The deployment intent to validate
+ * @returns Array of findings for classification violations
+ */
+export function validateIntentClassification(intent: DeploymentIntent): ValidationFinding[] {
+  const findings: ValidationFinding[] = [];
+
+  const intentAny = intent as unknown as Record<string, unknown>;
+  const classification = intentAny['intentClassification'] as Record<string, unknown> | undefined;
+
+  // Classification is required
+  if (!classification) {
+    findings.push(
+      createBusinessFinding(
+        'intentClassification',
+        'MISSING_INTENT_CLASSIFICATION',
+        'Intent classification is REQUIRED. Every intent must be classified as SIMULATED or EXECUTABLE.',
+        ValidationSeverity.ERROR,
+        BusinessRuleCategory.GOVERNANCE,
+        {
+          suggestion: 'Add intentClassification with intentType set to SIMULATED or EXECUTABLE',
+        }
+      )
+    );
+    return findings;
+  }
+
+  const intentType = classification['intentType'];
+  const isAuthorizedForProduction = classification['isAuthorizedForProduction'];
+  const capabilities = classification['capabilities'] as Record<string, unknown> | undefined;
+
+  // Validate intent type
+  if (intentType !== 'SIMULATED' && intentType !== 'EXECUTABLE') {
+    findings.push(
+      createBusinessFinding(
+        'intentClassification.intentType',
+        'INVALID_INTENT_TYPE',
+        'Intent type must be either SIMULATED or EXECUTABLE',
+        ValidationSeverity.ERROR,
+        BusinessRuleCategory.GOVERNANCE,
+        {
+          actual: String(intentType),
+          expected: 'SIMULATED or EXECUTABLE',
+        }
+      )
+    );
+    return findings;
+  }
+
+  // SIMULATED intent validation
+  if (intentType === 'SIMULATED') {
+    // Must NOT be authorized for production
+    if (isAuthorizedForProduction !== false) {
+      findings.push(
+        createBusinessFinding(
+          'intentClassification.isAuthorizedForProduction',
+          'SIMULATED_INTENT_AUTHORIZATION_ERROR',
+          'SIMULATED intents MUST have isAuthorizedForProduction set to false',
+          ValidationSeverity.ERROR,
+          BusinessRuleCategory.GOVERNANCE,
+          {
+            expected: 'false',
+            actual: String(isAuthorizedForProduction),
+          }
+        )
+      );
+    }
+
+    // Validate capabilities are restricted
+    if (capabilities) {
+      const blockedCapabilities = [
+        'canPromote',
+        'canExport',
+        'canTriggerDeployment',
+        'canModifyProduction',
+        'canAllocateResources',
+      ];
+
+      blockedCapabilities.forEach(cap => {
+        if (capabilities[cap] === true) {
+          findings.push(
+            createBusinessFinding(
+              `intentClassification.capabilities.${cap}`,
+              'SIMULATED_INTENT_CAPABILITY_ERROR',
+              `SIMULATED intents MUST have ${cap} set to false`,
+              ValidationSeverity.ERROR,
+              BusinessRuleCategory.GOVERNANCE,
+              {
+                expected: 'false',
+                actual: 'true',
+              }
+            )
+          );
+        }
+      });
+    }
+
+    // Validate simulated metadata is present
+    const simulatedMetadata = intentAny['simulatedIntentMetadata'];
+    if (!simulatedMetadata) {
+      findings.push(
+        createBusinessFinding(
+          'simulatedIntentMetadata',
+          'MISSING_SIMULATED_METADATA',
+          'SIMULATED intents should have simulatedIntentMetadata',
+          ValidationSeverity.WARNING,
+          BusinessRuleCategory.GOVERNANCE,
+          {
+            suggestion: 'Include simulatedIntentMetadata with simulation purpose and prerequisites',
+          }
+        )
+      );
+    }
+  }
+
+  // EXECUTABLE intent validation
+  if (intentType === 'EXECUTABLE') {
+    // Must be authorized for production
+    if (isAuthorizedForProduction !== true) {
+      findings.push(
+        createBusinessFinding(
+          'intentClassification.isAuthorizedForProduction',
+          'EXECUTABLE_INTENT_AUTHORIZATION_ERROR',
+          'EXECUTABLE intents MUST have isAuthorizedForProduction set to true',
+          ValidationSeverity.ERROR,
+          BusinessRuleCategory.GOVERNANCE,
+          {
+            expected: 'true',
+            actual: String(isAuthorizedForProduction),
+          }
+        )
+      );
+    }
+
+    // Validate executable metadata with authorization
+    const executableMetadata = intentAny['executableIntentMetadata'] as Record<string, unknown> | undefined;
+    if (!executableMetadata) {
+      findings.push(
+        createBusinessFinding(
+          'executableIntentMetadata',
+          'MISSING_EXECUTABLE_METADATA',
+          'EXECUTABLE intents MUST have executableIntentMetadata with authorization records',
+          ValidationSeverity.ERROR,
+          BusinessRuleCategory.GOVERNANCE
+        )
+      );
+    } else {
+      // Validate authorization record
+      const authorization = executableMetadata['authorization'] as Record<string, unknown> | undefined;
+      if (!authorization) {
+        findings.push(
+          createBusinessFinding(
+            'executableIntentMetadata.authorization',
+            'MISSING_AUTHORIZATION_RECORD',
+            'EXECUTABLE intents MUST have an authorization record proving governance approval',
+            ValidationSeverity.ERROR,
+            BusinessRuleCategory.GOVERNANCE
+          )
+        );
+      } else {
+        // Validate authorization is independent of simulation systems
+        if (authorization['independentOfSimulationSystems'] !== true) {
+          findings.push(
+            createBusinessFinding(
+              'executableIntentMetadata.authorization.independentOfSimulationSystems',
+              'AUTHORIZATION_NOT_INDEPENDENT',
+              'Authorization MUST be independent of simulation systems (independentOfSimulationSystems must be true)',
+              ValidationSeverity.ERROR,
+              BusinessRuleCategory.GOVERNANCE,
+              {
+                expected: 'true',
+                actual: String(authorization['independentOfSimulationSystems']),
+              }
+            )
+          );
+        }
+
+        // Validate approval records exist
+        const approvalRecords = authorization['approvalRecords'] as unknown[] | undefined;
+        if (!approvalRecords || approvalRecords.length === 0) {
+          findings.push(
+            createBusinessFinding(
+              'executableIntentMetadata.authorization.approvalRecords',
+              'MISSING_APPROVAL_RECORDS',
+              'Authorization must have at least one approval record proving explicit governance approval',
+              ValidationSeverity.ERROR,
+              BusinessRuleCategory.GOVERNANCE
+            )
+          );
+        }
+
+        // Validate governance workflow reference
+        if (!authorization['governanceWorkflowId']) {
+          findings.push(
+            createBusinessFinding(
+              'executableIntentMetadata.authorization.governanceWorkflowId',
+              'MISSING_GOVERNANCE_WORKFLOW',
+              'Authorization must reference the governance workflow that produced it',
+              ValidationSeverity.ERROR,
+              BusinessRuleCategory.GOVERNANCE
+            )
+          );
+        }
+      }
+    }
+  }
+
+  return findings;
+}
+
+// =============================================================================
+// UPDATED COMPOSITE BUSINESS RULE VALIDATION
 // =============================================================================
 
 /**
  * Perform complete business rule validation on a deployment intent.
  *
- * This function validates all business rules:
+ * This function validates all business rules including:
  * 1. Cost envelope constraints
  * 2. Governance compliance
  * 3. Risk thresholds
+ * 4. Simulation context guardrails (NEW)
+ * 5. ROI context guardrails (NEW)
+ * 6. Intent classification (NEW)
  *
  * The function is:
  * - Deterministic: Same input produces same output
@@ -1095,11 +1636,19 @@ export function validateBusinessRules(intent: DeploymentIntent): BusinessRuleVal
   const governanceFindings = validateGovernanceCompliance(intent);
   const riskFindings = validateRiskThresholds(intent);
 
+  // NEW: Simulation and ROI context validation
+  const simulationFindings = validateSimulationContext(intent);
+  const roiFindings = validateROIContext(intent);
+  const classificationFindings = validateIntentClassification(intent);
+
   // Combine all findings
   const allFindings = [
     ...costFindings,
     ...governanceFindings,
     ...riskFindings,
+    ...simulationFindings,
+    ...roiFindings,
+    ...classificationFindings,
   ];
 
   return {

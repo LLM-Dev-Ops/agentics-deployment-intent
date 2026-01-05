@@ -67,6 +67,66 @@ export type {
   // Lifecycle types
   LifecycleState,
 
+  // Simulation Context types
+  ExtendedSimulationReference,
+  SimulationScenarioType,
+  SimulationConfidenceLevel,
+  SimulationScenarioMetadata,
+  SimulationScope,
+  AssumptionCategory,
+  AssumptionSensitivity,
+  SimulationAssumption,
+  AssumptionSource,
+  SimulationAssumptionSet,
+  SimulationArtifactType,
+  SimulationArtifact,
+  SimulationArtifactCollection,
+  SimulationMetrics,
+  SimulationKPI,
+  SimulationOutcomes,
+  SimulationFinding,
+  SimulationRecommendation,
+  SimulationContext,
+
+  // ROI Context types
+  ROIAnalysisReference,
+  FinancialTimeHorizon,
+  FinancialImpactCategory,
+  FinancialConfidenceLevel,
+  FinancialProjection,
+  FinancialProjectionSet,
+  FinancialRiskType,
+  FinancialRiskFactor,
+  RiskAdjustedDelta,
+  PaybackPeriod,
+  NPVCalculation,
+  IRRCalculation,
+  ROICalculation,
+  FinancialMetricsSummary,
+  FinancialComparison,
+  CostBreakdownCategory,
+  CostBreakdownItem,
+  CostBreakdown,
+  ROIContext,
+
+  // Intent Classification types
+  IntentType,
+  IntentClassification,
+  IntentCapabilities,
+  IntentRestrictions,
+  SimulatedIntentMetadata,
+  SimulationPurpose,
+  AuthorizationPrerequisite,
+  ExecutableIntentMetadata,
+  ExecutionAuthorization,
+  IntentApprovalRecord,
+  AuthorizedScope,
+  AuthorizationCondition,
+  RevocationPolicy,
+  AuthorizationValidityConditions,
+  IntentAuthorizationRequest,
+  PendingApproval,
+
   // Topology types
   OrganizationalTopology,
   Organization,
@@ -152,6 +212,22 @@ export {
   isERPCapabilityRequirements,
   isValidCapabilityIdFormat,
   validateCapabilityReferences,
+  // Simulation context utilities
+  isSimulationContext,
+  DEFAULT_SIMULATION_DISCLAIMER,
+  // ROI context utilities
+  isROIContext,
+  DEFAULT_ROI_DISCLAIMER,
+  COMBINED_CONTEXT_DISCLAIMER,
+  // Intent classification utilities
+  SIMULATED_INTENT_CAPABILITIES,
+  SIMULATED_INTENT_RESTRICTIONS,
+  EXECUTABLE_INTENT_CAPABILITIES,
+  isSimulatedIntent,
+  isExecutableIntent,
+  validateSimulatedClassification,
+  validateExecutableAuthorization,
+  SIMULATED_INTENT_BLOCKED_MESSAGE,
 } from './schema/index.js';
 
 // =============================================================================
@@ -222,6 +298,13 @@ export {
   VALID_TRANSITIONS as PROMOTION_VALID_TRANSITIONS,
   TransitionErrorCodes,
   DEFAULT_GUARDS,
+  // Simulated intent protection guards
+  createSimulatedIntentGuard,
+  createSimulationContextGuard,
+  createROIContextGuard,
+  createExecutableAuthorizationGuard,
+  createSimulatedIntentProtectionGuard,
+  createExecutableIntentValidationGuard,
 } from './promotion/index.js';
 
 // =============================================================================

@@ -22,7 +22,22 @@ import {
 } from './types.js';
 import { validateSchema, validateRequiredFields, validateFieldTypes, validateEnumValues } from './schema.js';
 import { validateReferentialIntegrity } from './integrity.js';
-import { validateBusinessRules, validateCostEnvelope, validateGovernanceCompliance, validateRiskThresholds } from './business.js';
+import {
+  validateBusinessRules,
+  validateCostEnvelope,
+  validateGovernanceCompliance,
+  validateRiskThresholds,
+  validateSimulationContext,
+  validateROIContext,
+  validateIntentClassification,
+} from './business.js';
+
+// Re-export for external usage
+export {
+  validateSimulationContext,
+  validateROIContext,
+  validateIntentClassification,
+};
 
 // =============================================================================
 // DEFAULT OPTIONS

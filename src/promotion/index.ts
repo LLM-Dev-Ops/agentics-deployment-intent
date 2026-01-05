@@ -85,6 +85,7 @@ export {
 
 // Guard exports
 export {
+  // Standard guards
   createValidationGuard,
   createApprovalGuard,
   createExportReadyGuard,
@@ -94,6 +95,14 @@ export {
   createPermissiveGuard,
   createRestrictiveGuard,
   createPredicateGuard,
+  // Simulated intent protection guards
+  createSimulatedIntentGuard,
+  createSimulationContextGuard,
+  createROIContextGuard,
+  createExecutableAuthorizationGuard,
+  createSimulatedIntentProtectionGuard,
+  createExecutableIntentValidationGuard,
+  // Default guards (includes simulated intent protection)
   DEFAULT_GUARDS,
 } from './guards.js';
 

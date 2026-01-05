@@ -66,6 +66,11 @@ export {
   validateCostEnvelope,
   validateGovernanceCompliance,
   validateRiskThresholds,
+
+  // Simulation and ROI context validators (NEW)
+  validateSimulationContext,
+  validateROIContext,
+  validateIntentClassification,
 } from './validator.js';
 
 // =============================================================================

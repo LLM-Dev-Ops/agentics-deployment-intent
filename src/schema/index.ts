@@ -438,3 +438,100 @@ export {
   isValidCapabilityIdFormat,
   validateCapabilityReferences,
 } from './erp.js';
+
+// =============================================================================
+// Simulation Context Types
+// =============================================================================
+
+export type {
+  ExtendedSimulationReference,
+  SimulationScenarioType,
+  SimulationConfidenceLevel,
+  SimulationScenarioMetadata,
+  SimulationScope,
+  AssumptionCategory,
+  AssumptionSensitivity,
+  SimulationAssumption,
+  AssumptionSource,
+  SimulationAssumptionSet,
+  SimulationArtifactType,
+  SimulationArtifact,
+  SimulationArtifactCollection,
+  SimulationMetrics,
+  SimulationKPI,
+  SimulationOutcomes,
+  SimulationFinding,
+  SimulationRecommendation,
+  SimulationContext,
+} from './simulation.js';
+
+export {
+  isSimulationContext,
+  DEFAULT_SIMULATION_DISCLAIMER,
+} from './simulation.js';
+
+// =============================================================================
+// ROI Context Types
+// =============================================================================
+
+export type {
+  ROIAnalysisReference,
+  FinancialTimeHorizon,
+  FinancialImpactCategory,
+  FinancialConfidenceLevel,
+  FinancialProjection,
+  FinancialProjectionSet,
+  FinancialRiskType,
+  FinancialRiskFactor,
+  RiskAdjustedDelta,
+  PaybackPeriod,
+  NPVCalculation,
+  IRRCalculation,
+  ROICalculation,
+  FinancialMetricsSummary,
+  FinancialComparison,
+  CostBreakdownCategory,
+  CostBreakdownItem,
+  CostBreakdown,
+  ROIContext,
+} from './roi.js';
+
+export {
+  isROIContext,
+  DEFAULT_ROI_DISCLAIMER,
+  COMBINED_CONTEXT_DISCLAIMER,
+} from './roi.js';
+
+// =============================================================================
+// Intent Classification Types
+// =============================================================================
+
+export type {
+  IntentType,
+  IntentClassification,
+  IntentCapabilities,
+  IntentRestrictions,
+  SimulatedIntentMetadata,
+  SimulationPurpose,
+  AuthorizationPrerequisite,
+  ExecutableIntentMetadata,
+  ExecutionAuthorization,
+  ApprovalRecord as IntentApprovalRecord,
+  AuthorizedScope,
+  AuthorizationCondition,
+  RevocationPolicy,
+  AuthorizationValidityConditions,
+  IntentAuthorizationRequest,
+  PendingApproval,
+} from './intent-classification.js';
+
+export {
+  SIMULATED_INTENT_CAPABILITIES,
+  SIMULATED_INTENT_RESTRICTIONS,
+  EXECUTABLE_INTENT_CAPABILITIES,
+  isSimulatedIntent,
+  isExecutableIntent,
+  validateSimulatedClassification,
+  validateExecutableAuthorization,
+  SIMULATED_INTENT_BLOCKED_MESSAGE,
+} from './intent-classification.js';

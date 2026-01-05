@@ -32,6 +32,13 @@ import type {
   RiskToleranceSpecification,
 } from './integration.js';
 import type { ERPCapabilityRequirements } from './erp.js';
+import type { SimulationContext } from './simulation.js';
+import type { ROIContext } from './roi.js';
+import type {
+  IntentClassification,
+  SimulatedIntentMetadata,
+  ExecutableIntentMetadata,
+} from './intent-classification.js';
 
 /**
  * Complete Deployment Intent document.
@@ -221,6 +228,75 @@ export interface DeploymentIntent {
    * rules (other than ERP-specific validation), or provenance tracking.
    */
   readonly erpCapabilityRequirements?: ERPCapabilityRequirements;
+
+  // ============================================================================
+  // Intent Classification and Context Section
+  // ============================================================================
+
+  /**
+   * REQUIRED: Classification of the intent as SIMULATED or EXECUTABLE.
+   *
+   * This classification determines what operations are permitted on the intent:
+   * - SIMULATED: Informational only, cannot trigger production operations
+   * - EXECUTABLE: Authorized for production use through explicit governance
+   *
+   * CRITICAL: An intent classified as SIMULATED can NEVER be automatically
+   * promoted to EXECUTABLE. The transition requires explicit authorization
+   * through governance workflows that are independent of simulation and ROI systems.
+   */
+  readonly intentClassification: IntentClassification;
+
+  /**
+   * Optional simulation context from the agentics simulation engine.
+   *
+   * CRITICAL: This context is INFORMATIONAL ONLY.
+   * The presence of simulation data does NOT:
+   * - Authorize production deployment
+   * - Enable automatic promotion to executable status
+   * - Bypass governance or approval workflows
+   *
+   * Simulation context provides decision support by attaching:
+   * - Simulation identifiers and references
+   * - Scenario metadata and assumptions
+   * - Outcome artifacts and projections
+   *
+   * Any transition from simulated to executable intent requires explicit,
+   * separate authorization outside the scope of the simulation system.
+   */
+  readonly simulationContext?: SimulationContext;
+
+  /**
+   * Optional ROI context from the enterprise ROI engine.
+   *
+   * CRITICAL: This context is INFORMATIONAL ONLY.
+   * Financial projections and impact data do NOT:
+   * - Authorize production deployment
+   * - Enable automatic promotion to executable status
+   * - Bypass governance or approval workflows
+   *
+   * ROI context provides decision support by attaching:
+   * - Projected savings and benefits
+   * - Risk-adjusted financial deltas
+   * - Confidence indicators and ranges
+   * - Cost breakdowns and comparisons
+   *
+   * Any transition from simulated to executable intent requires explicit,
+   * separate authorization outside the scope of the ROI analysis system.
+   */
+  readonly roiContext?: ROIContext;
+
+  /**
+   * Metadata specific to SIMULATED intents.
+   * Present only when intentClassification.intentType === 'SIMULATED'.
+   */
+  readonly simulatedIntentMetadata?: SimulatedIntentMetadata;
+
+  /**
+   * Metadata specific to EXECUTABLE intents.
+   * Present only when intentClassification.intentType === 'EXECUTABLE'.
+   * MUST contain proper authorization records proving explicit governance approval.
+   */
+  readonly executableIntentMetadata?: ExecutableIntentMetadata;
 
   /**
    * Optional extension data for custom attributes.
