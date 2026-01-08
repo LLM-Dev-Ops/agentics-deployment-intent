@@ -50,9 +50,16 @@ export interface ExecutionLayer {
 
 /**
  * Execution proof demonstrating multi-layer participation
+ *
+ * REQUIRED: Either layers_executed OR execution_graph must be present.
+ * The execution_id is a unique identifier for this execution trace.
  */
 export interface ExecutionProof {
+  /** Unique identifier for this execution trace */
+  execution_id: string;
+  /** List of execution layers that participated in processing */
   layers_executed: ExecutionLayer[];
+  /** Optional graph representation of execution flow */
   execution_graph?: {
     root_layer?: string;
     edges?: Array<{
@@ -61,7 +68,9 @@ export interface ExecutionProof {
       relationship?: 'PRECEDES' | 'TRIGGERS' | 'DEPENDS_ON';
     }>;
   };
+  /** Total execution time across all layers in milliseconds */
   total_execution_time_ms?: number;
+  /** Hash of the validation results for integrity verification */
   validation_hash?: string;
 }
 

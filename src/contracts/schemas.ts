@@ -579,9 +579,14 @@ export const RESPONSE_SCHEMA: Record<string, unknown> = {
   "definitions": {
     "executionProof": {
       "type": "object",
-      "required": ["layers_executed"],
-      "description": "Proof of multi-layer execution participation",
+      "required": ["execution_id", "layers_executed"],
+      "description": "Proof of multi-layer execution participation. REQUIRED: execution_id must be present to uniquely identify this execution trace.",
       "properties": {
+        "execution_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique identifier for this execution trace"
+        },
         "layers_executed": {
           "type": "array",
           "minItems": 1,

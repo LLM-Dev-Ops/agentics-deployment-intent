@@ -79,6 +79,7 @@ function createReadOnlyExecutionProof(layerType: ExecutionLayer['layer_type']): 
   };
 
   return {
+    execution_id: randomUUID(),
     layers_executed: [layer],
     total_execution_time_ms: 0,
   };
@@ -436,8 +437,9 @@ const server = createServer((req, res) => {
   handleRequest(req, res).catch((error) => {
     console.error('Request error:', error);
 
-    // Even error responses must include execution proof
+    // Even error responses must include execution proof per contract
     const executionProof: ExecutionProof = {
+      execution_id: randomUUID(),
       layers_executed: [{
         layer_id: `error-handler-${randomUUID()}`,
         layer_type: 'RESOLUTION',
