@@ -1,0 +1,167 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agentics.ai/contracts/intent/v1/response.schema.json",
+  "title": "Intent Response Schema",
+  "description": "JSON Schema for validating intent API responses. All responses must conform to this schema and include mandatory execution proof.",
+  "type": "object",
+  "required": [
+    "success",
+    "version",
+    "schemaVersion",
+    "executionProof"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "success": {
+      "type": "boolean",
+      "description": "Whether the request was successful"
+    },
+    "data": {
+      "description": "Response data (present on success)"
+    },
+    "error": {
+      "type": "object",
+      "description": "Error details (present on failure)",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Error code"
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable error message"
+        },
+        "details": {
+          "type": "array",
+          "description": "Detailed error information",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": { "type": "string" },
+              "message": { "type": "string" },
+              "code": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "version": {
+      "type": "string",
+      "description": "API version"
+    },
+    "schemaVersion": {
+      "type": "string",
+      "description": "Schema version"
+    },
+    "executionProof": {
+      "$ref": "#/definitions/executionProof",
+      "description": "Mandatory execution proof demonstrating multi-layer participation"
+    },
+    "requestId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique request identifier for tracing"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Response timestamp"
+    }
+  },
+  "definitions": {
+    "executionProof": {
+      "type": "object",
+      "required": ["layers_executed"],
+      "description": "Proof of multi-layer execution participation",
+      "properties": {
+        "layers_executed": {
+          "type": "array",
+          "minItems": 1,
+          "description": "List of execution layers that participated in processing this request",
+          "items": {
+            "type": "object",
+            "required": ["layer_id", "layer_type", "executed_at", "status"],
+            "additionalProperties": false,
+            "properties": {
+              "layer_id": {
+                "type": "string",
+                "description": "Unique identifier for this execution layer"
+              },
+              "layer_type": {
+                "type": "string",
+                "enum": [
+                  "CONTRACT_VALIDATION",
+                  "SCHEMA_VALIDATION",
+                  "BUSINESS_VALIDATION",
+                  "INTEGRITY_VALIDATION",
+                  "GOVERNANCE_CHECK",
+                  "ORCHESTRATION",
+                  "RESOLUTION"
+                ],
+                "description": "Type of execution layer"
+              },
+              "executed_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Timestamp when this layer executed"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["PASSED", "FAILED", "SKIPPED"],
+                "description": "Execution status of this layer"
+              },
+              "duration_ms": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Execution duration in milliseconds"
+              },
+              "findings_count": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Number of findings from this layer"
+              },
+              "metadata": {
+                "type": "object",
+                "description": "Additional layer-specific metadata"
+              }
+            }
+          }
+        },
+        "execution_graph": {
+          "type": "object",
+          "description": "Optional graph representation of execution flow",
+          "properties": {
+            "root_layer": {
+              "type": "string",
+              "description": "ID of the root/first execution layer"
+            },
+            "edges": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["from", "to"],
+                "properties": {
+                  "from": { "type": "string" },
+                  "to": { "type": "string" },
+                  "relationship": {
+                    "type": "string",
+                    "enum": ["PRECEDES", "TRIGGERS", "DEPENDS_ON"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "total_execution_time_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Total execution time across all layers"
+        },
+        "validation_hash": {
+          "type": "string",
+          "description": "Hash of the validation results for integrity verification"
+        }
+      }
+    }
+  }
+}
