@@ -11,6 +11,11 @@
  * 2. Invalid payloads are rejected BEFORE any intent resolution runs
  * 3. All responses include mandatory execution proof (layers_executed)
  * 4. No manual field checks or fallback logic - contract is the source of truth
+ *
+ * ARCHITECTURAL BOUNDARY:
+ * Inspection and explanation are intentionally excluded from this repo.
+ * Inspect is a read-only concern handled by agentics-results-index or domain-specific repos.
+ * This server exposes WRITE-SIDE endpoints only: validation, not result querying.
  */
 
 import { createServer, IncomingMessage, ServerResponse } from 'http';

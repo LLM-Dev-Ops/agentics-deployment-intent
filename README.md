@@ -31,6 +31,8 @@
 
 **Agentics Deployment Intent** is a production-grade validation and governance system that bridges the gap between AI simulation environments (like RuvVector) and real-world deployment infrastructure. It ensures that deployment intents from simulation platforms are rigorously validated, governed, and traceable before reaching production systems.
 
+> **⚠️ Architectural Boundary:** This repository is **write-side only** intent infrastructure. Inspection and explanation are intentionally excluded. Inspect is a read-only concern handled by `agentics-results-index` or domain-specific repos. See [ARCHITECTURE_BOUNDARIES.md](docs/ARCHITECTURE_BOUNDARIES.md) for details.
+
 ```
 ┌─────────────────────┐     ┌──────────────────────────┐     ┌─────────────────────┐
 │   AI Simulation     │────▶│  Deployment Intent API   │────▶│  Infrastructure     │

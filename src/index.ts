@@ -8,6 +8,19 @@
  * @module agentics-deployment-intent
  * @version 1.0.0
  *
+ * ## Architectural Boundary (CRITICAL)
+ *
+ * This repository is WRITE-SIDE ONLY intent infrastructure.
+ *
+ * Inspection and explanation are intentionally excluded from this repo.
+ * Inspect is a read-only concern handled by agentics-results-index or domain-specific repos.
+ *
+ * This repo MUST NOT: expose inspect commands, query execution results,
+ * explain outcomes, correlate artifacts, or read simulation/deployment state.
+ *
+ * This repo MAY: define intent schemas, validate intent payloads,
+ * store intent metadata, expose intent identifiers for downstream systems.
+ *
  * ## Core Modules
  *
  * - **Schema**: Type definitions for deployment intents and related structures
