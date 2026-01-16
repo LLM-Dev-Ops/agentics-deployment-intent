@@ -19,9 +19,14 @@ import {
   validateDeploymentIntent,
   VERSION,
   SCHEMA_VERSION,
-  buildExecutiveSynthesis,
+  buildExecutiveSummary,
+  elevateRiskForProduction,
+  isProductionTarget,
+  calculateSuccessRate,
+  countBlockingIssues,
+  extractBlockingIssues,
   type DeploymentIntent,
-  type ExecutiveSynthesisOutput,
+  type SynthesisResult,
 } from './index.js';
 import {
   ContractValidator,
@@ -63,7 +68,7 @@ interface ContractAPIResponse {
   executionProof: ExecutionProof;
   requestId: string;
   timestamp: string;
-  synthesis?: ExecutiveSynthesisOutput;
+  synthesis?: SynthesisResult;
 }
 
 // Initialize contract validator (singleton)
@@ -422,13 +427,35 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
 
         // Build executive synthesis output for deployment readiness assessment
         // This enables integration with executive synthesis systems
+        // Using common builder pattern for consistency across all commands
         const intent = payload as DeploymentIntent;
-        const synthesisOutput = buildExecutiveSynthesis({
-          intent,
-          validationResult,
-          executionProof,
-          targetEnvironment: extractTargetEnvironment(intent),
-        });
+        const targetEnvironment = extractTargetEnvironment(intent);
+
+        const synthesisOutput = buildExecutiveSummary(
+          {
+            environment: targetEnvironment || 'development',
+            timestamp: new Date().toISOString(),
+            version: VERSION,
+            commit_sha: process.env['GIT_SHA'],
+            id: intent.intentId,
+            name: `Deploy ${intent.intentId.substring(0, 8)}`,
+          },
+          {
+            success_rate: calculateSuccessRate(validationResult),
+            failed_iterations: countBlockingIssues(validationResult),
+            blocking_issues: extractBlockingIssues(validationResult),
+            total_iterations: executionProof.layers_executed.length,
+            resources_affected: (intent.agentClasses?.classes?.length || 0) +
+              (intent.organizationalTopology?.businessUnits?.length || 0),
+            rollback_available: !!(intent.provenance?.genesisRecord),
+          },
+          executionProof.layers_executed.map((l) => l.layer_type)
+        );
+
+        // Apply production risk elevation if targeting production
+        if (isProductionTarget(targetEnvironment)) {
+          elevateRiskForProduction(synthesisOutput);
+        }
 
         // Return validation result with execution proof and synthesis
         sendJSON(res, validationResult.isValid ? 200 : 422, {

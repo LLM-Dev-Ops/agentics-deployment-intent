@@ -438,6 +438,7 @@ export {
 // Synthesis Module Exports
 // =============================================================================
 
+// Types
 export type {
   DeploymentStatus,
   BlastRadius,
@@ -453,18 +454,41 @@ export type {
   RiskLevel,
   ExecutiveSynthesisSummary,
   ExecutiveSynthesisOutput,
+  SummaryContext,
+  SummaryResults,
+  SynthesisResult,
+  SynthesisBuilderOptions,
 } from './synthesis/index.js';
 
+// Common Builder Pattern (Primary API)
+export {
+  // Main builder function (common pattern)
+  buildExecutiveSummary,
+
+  // Risk elevation for production
+  elevateRiskForProduction,
+
+  // Environment helpers
+  determineEnvironment,
+  isProductionTarget,
+
+  // Result calculation helpers
+  calculateSuccessRate,
+  countBlockingIssues,
+  extractBlockingIssues,
+} from './synthesis/index.js';
+
+// Intent-Specific Builder
 export {
   buildExecutiveSynthesis,
   buildDeploymentSteps,
   buildDeploymentResults,
   buildDeploymentScenario,
   buildExecutionMetadata,
-  buildExecutiveSummary,
+  buildIntentExecutiveSummary,
   determineDeploymentStatus,
   determineBlastRadius,
-  determineEnvironmentCategory,
+  determineIntentEnvironmentCategory,
   determineRiskLevel,
   determineRecommendation,
 } from './synthesis/index.js';
