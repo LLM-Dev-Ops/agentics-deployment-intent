@@ -19,6 +19,9 @@ import {
   validateDeploymentIntent,
   VERSION,
   SCHEMA_VERSION,
+  buildExecutiveSynthesis,
+  type DeploymentIntent,
+  type ExecutiveSynthesisOutput,
 } from './index.js';
 import {
   ContractValidator,
@@ -43,6 +46,9 @@ const PORT = parseInt(process.env.PORT || '8080', 10);
  * - version: API version
  * - schemaVersion: Schema version
  * - executionProof: Mandatory proof of multi-layer participation
+ *
+ * Optional synthesis field for executive synthesis compatibility:
+ * - synthesis: Executive synthesis output (present on successful validation)
  */
 interface ContractAPIResponse {
   success: boolean;
@@ -57,6 +63,7 @@ interface ContractAPIResponse {
   executionProof: ExecutionProof;
   requestId: string;
   timestamp: string;
+  synthesis?: ExecutiveSynthesisOutput;
 }
 
 // Initialize contract validator (singleton)
@@ -118,6 +125,40 @@ function parseBody(req: IncomingMessage): Promise<string> {
     req.on('end', () => resolve(body));
     req.on('error', reject);
   });
+}
+
+/**
+ * Extract target environment from deployment intent
+ * Used to determine environment category for executive synthesis
+ */
+function extractTargetEnvironment(intent: DeploymentIntent): string | undefined {
+  // Check tags for environment indicators
+  const tags = intent.tags || {};
+  const tagValues = [...Object.keys(tags), ...Object.values(tags)].map(v => String(v).toLowerCase());
+
+  for (const val of tagValues) {
+    if (val.includes('prod')) return 'production';
+    if (val.includes('stag')) return 'staging';
+    if (val.includes('dev')) return 'development';
+    if (val.includes('test')) return 'testing';
+  }
+
+  // Check organization name for environment hints
+  const orgName = intent.organizationalTopology?.organization?.organizationName?.toLowerCase() || '';
+  if (orgName.includes('prod')) return 'production';
+  if (orgName.includes('stag')) return 'staging';
+  if (orgName.includes('dev')) return 'development';
+
+  // Check lifecycle state for environment hints
+  const state = intent.state;
+  if (state === 'EXPORTED' || state === 'PROMOTED') {
+    return 'production';
+  }
+  if (state === 'APPROVED') {
+    return 'staging';
+  }
+
+  return undefined;
 }
 
 /**
@@ -379,7 +420,17 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
         // Finalize execution proof
         const executionProof = finalizeExecutionProof(proofBuilder, validationResult);
 
-        // Return validation result with execution proof
+        // Build executive synthesis output for deployment readiness assessment
+        // This enables integration with executive synthesis systems
+        const intent = payload as DeploymentIntent;
+        const synthesisOutput = buildExecutiveSynthesis({
+          intent,
+          validationResult,
+          executionProof,
+          targetEnvironment: extractTargetEnvironment(intent),
+        });
+
+        // Return validation result with execution proof and synthesis
         sendJSON(res, validationResult.isValid ? 200 : 422, {
           success: validationResult.isValid,
           data: {
@@ -399,6 +450,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
           executionProof,
           requestId,
           timestamp: new Date().toISOString(),
+          synthesis: synthesisOutput,
         });
         return;
 

@@ -435,6 +435,41 @@ export {
 } from './export/index.js';
 
 // =============================================================================
+// Synthesis Module Exports
+// =============================================================================
+
+export type {
+  DeploymentStatus,
+  BlastRadius,
+  EnvironmentCategory,
+  DeployReference,
+  DeploymentResults,
+  DeploymentMetrics,
+  DeploymentScenario,
+  StepStatus,
+  DeploymentStep,
+  ExecutionMetadata,
+  ExecutiveRecommendation,
+  RiskLevel,
+  ExecutiveSynthesisSummary,
+  ExecutiveSynthesisOutput,
+} from './synthesis/index.js';
+
+export {
+  buildExecutiveSynthesis,
+  buildDeploymentSteps,
+  buildDeploymentResults,
+  buildDeploymentScenario,
+  buildExecutionMetadata,
+  buildExecutiveSummary,
+  determineDeploymentStatus,
+  determineBlastRadius,
+  determineEnvironmentCategory,
+  determineRiskLevel,
+  determineRecommendation,
+} from './synthesis/index.js';
+
+// =============================================================================
 // Version Information
 // =============================================================================
 

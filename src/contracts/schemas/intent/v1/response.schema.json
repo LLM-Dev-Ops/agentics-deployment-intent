@@ -66,6 +66,10 @@
       "type": "string",
       "format": "date-time",
       "description": "Response timestamp"
+    },
+    "synthesis": {
+      "$ref": "#/definitions/executiveSynthesis",
+      "description": "Executive synthesis output for deployment intent (present on successful validation)"
     }
   },
   "definitions": {
@@ -165,6 +169,282 @@
         "validation_hash": {
           "type": "string",
           "description": "Hash of the validation results for integrity verification"
+        }
+      }
+    },
+    "executiveSynthesis": {
+      "type": "object",
+      "description": "Executive synthesis output for deployment intent",
+      "required": ["deployReference", "executiveSummary"],
+      "properties": {
+        "deployReference": {
+          "$ref": "#/definitions/deployReference"
+        },
+        "executiveSummary": {
+          "$ref": "#/definitions/executiveSummary"
+        }
+      }
+    },
+    "deployReference": {
+      "type": "object",
+      "description": "Deploy reference compatible with executive synthesis systems",
+      "required": ["id", "type", "repository", "status", "created_at", "iteration_count", "results", "scenario", "steps_executed", "execution_metadata"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^deploy-[a-zA-Z0-9]+$",
+          "description": "Unique deployment reference identifier (format: deploy-xxx)"
+        },
+        "type": {
+          "type": "string",
+          "const": "DeployReference",
+          "description": "Type discriminator for synthesis systems"
+        },
+        "repository": {
+          "type": "string",
+          "description": "Target environment/repository for deployment"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["resolved", "pending_approval", "failed", "blocked"],
+          "description": "Current deployment resolution status"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the deployment intent was created"
+        },
+        "completed_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the deployment resolution completed"
+        },
+        "iteration_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of deployment phases executed"
+        },
+        "results": {
+          "$ref": "#/definitions/deploymentResults"
+        },
+        "scenario": {
+          "$ref": "#/definitions/deploymentScenario"
+        },
+        "steps_executed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/deploymentStep"
+          },
+          "description": "Steps executed during deployment validation"
+        },
+        "execution_metadata": {
+          "$ref": "#/definitions/synthesisExecutionMetadata"
+        }
+      }
+    },
+    "deploymentResults": {
+      "type": "object",
+      "description": "Deployment execution results for synthesis",
+      "required": ["total_iterations", "successful_iterations", "failed_iterations", "success_rate", "metrics"],
+      "properties": {
+        "total_iterations": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total validation iterations performed"
+        },
+        "successful_iterations": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of iterations that passed"
+        },
+        "failed_iterations": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of iterations that failed (blocking issues)"
+        },
+        "success_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Deployment readiness score (0-1, where 1.0 = all checks pass)"
+        },
+        "metrics": {
+          "$ref": "#/definitions/deploymentMetrics"
+        }
+      }
+    },
+    "deploymentMetrics": {
+      "type": "object",
+      "description": "Deployment-specific metrics for executive synthesis",
+      "required": ["resources_affected", "rollback_available", "estimated_downtime_ms", "blast_radius"],
+      "properties": {
+        "resources_affected": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of resources affected by deployment"
+        },
+        "rollback_available": {
+          "type": "boolean",
+          "description": "Whether rollback is available if deployment fails"
+        },
+        "estimated_downtime_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Estimated downtime in milliseconds"
+        },
+        "blast_radius": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"],
+          "description": "Blast radius assessment"
+        },
+        "validation_findings": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of validation findings"
+        },
+        "governance_rules_evaluated": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of governance rules evaluated"
+        },
+        "approvals_required": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of required approvals"
+        },
+        "approvals_obtained": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of approvals obtained"
+        }
+      }
+    },
+    "deploymentScenario": {
+      "type": "object",
+      "description": "Deployment scenario metadata for synthesis",
+      "required": ["scenarioId", "name", "description", "category", "version"],
+      "properties": {
+        "scenarioId": {
+          "type": "string",
+          "description": "Unique scenario identifier (usually the intent ID)"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable deployment name"
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of what will be deployed"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["production", "staging", "development", "testing"],
+          "description": "Environment category for risk assessment (production triggers elevated risk language)"
+        },
+        "version": {
+          "type": "string",
+          "description": "Scenario version"
+        }
+      }
+    },
+    "deploymentStep": {
+      "type": "object",
+      "description": "Pre-deployment validation step",
+      "required": ["stepId", "action", "status", "duration_ms"],
+      "properties": {
+        "stepId": {
+          "type": "string",
+          "description": "Step identifier"
+        },
+        "action": {
+          "type": "string",
+          "description": "Action performed in this step"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["success", "failed", "skipped", "pending"],
+          "description": "Step execution status"
+        },
+        "duration_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Duration of step execution in milliseconds"
+        },
+        "details": {
+          "type": "object",
+          "description": "Additional step details"
+        }
+      }
+    },
+    "synthesisExecutionMetadata": {
+      "type": "object",
+      "description": "Execution metadata for tracing and verification",
+      "required": ["execution_id", "layer", "timestamp", "checksum"],
+      "properties": {
+        "execution_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique execution identifier"
+        },
+        "layer": {
+          "type": "string",
+          "const": "deployment",
+          "description": "Execution layer identifier"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Execution timestamp"
+        },
+        "trace_id": {
+          "type": "string",
+          "description": "Trace identifier for distributed tracing"
+        },
+        "checksum": {
+          "type": "string",
+          "description": "SHA-256 checksum for verification"
+        }
+      }
+    },
+    "executiveSummary": {
+      "type": "object",
+      "description": "Executive synthesis summary for deployment",
+      "required": ["recommendation", "risk_level", "summary", "key_points"],
+      "properties": {
+        "recommendation": {
+          "type": "string",
+          "enum": ["PROCEED", "DEFER", "APPROVE", "REJECT"],
+          "description": "Executive recommendation (PROCEED=ready, DEFER=blocked, APPROVE=awaiting approval, REJECT=failed)"
+        },
+        "risk_level": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"],
+          "description": "Risk level assessment"
+        },
+        "summary": {
+          "type": "string",
+          "description": "Brief summary for executives"
+        },
+        "key_points": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Key points for decision-making"
+        },
+        "blockers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Blockers preventing deployment (if any)"
+        },
+        "actions_required": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Actions required (if any)"
         }
       }
     }
