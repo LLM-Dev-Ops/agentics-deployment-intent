@@ -264,6 +264,12 @@ describe('RuvectorClient', () => {
       expect(event.execution_profile.tier).toBe('priority');
       expect(event.execution_profile.mode).toBe('production');
     });
+
+    it('should include source identifier for event routing', () => {
+      const event = client.createPlanCreatedEvent(testPlan);
+
+      expect(event.source).toBe('deployment-intent');
+    });
   });
 
   describe('createPlanApprovedEvent', () => {
@@ -292,6 +298,20 @@ describe('RuvectorClient', () => {
       expect((event.event_data as any).approval).toBeDefined();
     });
 
+    it('should include source identifier for execution trigger routing', () => {
+      const event = client.createPlanApprovedEvent(approvedPlan);
+
+      // CRITICAL: source field is required for downstream listeners
+      expect(event.source).toBe('deployment-intent');
+    });
+
+    it('should use approval timestamp for event timestamp', () => {
+      const event = client.createPlanApprovedEvent(approvedPlan);
+
+      // Timestamp should be the approval time, not current time
+      expect(event.timestamp).toBe('2026-01-26T13:00:00.000Z');
+    });
+
     it('should reject creating event for non-approved plans', () => {
       expect(() => client.createPlanApprovedEvent(testPlan)).toThrow(RuvectorError);
     });
@@ -304,6 +324,7 @@ describe('DecisionEvent Contract', () => {
       event_type: 'plan_approved',
       plan_id: '550e8400-e29b-41d4-a716-446655440000',
       simulation_id: '660e8400-e29b-41d4-a716-446655440001',
+      source: 'deployment-intent',
       execution_profile: {
         tier: 'critical',
         mode: 'production',
@@ -317,11 +338,31 @@ describe('DecisionEvent Contract', () => {
     // Verify contract fields are sufficient for downstream systems
     expect(event.plan_id).toBeDefined();
     expect(event.simulation_id).toBeDefined();
+    expect(event.source).toBe('deployment-intent');
     expect(event.execution_profile).toBeDefined();
     expect(event.timestamp).toBeDefined();
 
     // Execution profile contains everything needed to start execution
     expect(event.execution_profile.tier).toBe('critical');
     expect(event.execution_profile.mode).toBe('production');
+  });
+
+  it('should include source field for execution listener routing', () => {
+    // CRITICAL: The source field enables simulation-engine listeners
+    // to identify and process plan_approved events from deployment-intent
+    const event: DecisionEvent = {
+      event_type: 'plan_approved',
+      plan_id: '550e8400-e29b-41d4-a716-446655440000',
+      source: 'deployment-intent',
+      execution_profile: {
+        tier: 'standard',
+        mode: 'simulation',
+      },
+      timestamp: '2026-01-26T12:00:00.000Z',
+      sequence: 1,
+    };
+
+    expect(event.source).toBe('deployment-intent');
+    expect(event.event_type).toBe('plan_approved');
   });
 });

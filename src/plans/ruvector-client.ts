@@ -28,6 +28,9 @@ export type DecisionEventType = 'plan_created' | 'plan_approved';
  * Ruvector events MUST be sufficient for:
  * - Simulation Engine to wake up
  * - Orchestrator to execute
+ *
+ * CRITICAL: plan_approved events are the SOLE execution trigger.
+ * Listeners key on source + event_type to initiate execution.
  */
 export interface DecisionEvent {
   /** Event type discriminator */
@@ -38,6 +41,8 @@ export interface DecisionEvent {
   readonly simulation_id?: UUID;
   /** Intent ID (if linked) */
   readonly intent_id?: UUID;
+  /** Source system identifier for event routing */
+  readonly source: string;
   /** Execution profile for downstream systems */
   readonly execution_profile: ExecutionProfile;
   /** Event timestamp */
@@ -228,6 +233,7 @@ export class RuvectorClient {
       plan_id: plan.plan_id,
       simulation_id: plan.simulation_id,
       intent_id: plan.intent_id,
+      source: 'deployment-intent',
       execution_profile: plan.execution_profile,
       timestamp: new Date().toISOString(),
       sequence: ++this.sequence,
@@ -241,6 +247,11 @@ export class RuvectorClient {
 
   /**
    * Create a plan_approved event from an ExecutionPlan.
+   *
+   * CRITICAL: This event is the SOLE execution trigger.
+   * - Emitted exactly once per approval (idempotent by plan_id)
+   * - Only emitted for status === 'approved'
+   * - source field enables downstream routing to simulation-engine
    */
   createPlanApprovedEvent(plan: ExecutionPlan): DecisionEvent {
     if (plan.status !== 'approved' || !plan.approval) {
@@ -256,8 +267,9 @@ export class RuvectorClient {
       plan_id: plan.plan_id,
       simulation_id: plan.simulation_id,
       intent_id: plan.intent_id,
+      source: 'deployment-intent',
       execution_profile: plan.execution_profile,
-      timestamp: new Date().toISOString(),
+      timestamp: plan.approval.approved_at,
       sequence: ++this.sequence,
       event_data: {
         status: plan.status,
