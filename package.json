@@ -10,6 +10,8 @@
     "build:watch": "tsc --watch",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "start": "node dist/server.js",
     "prepublishOnly": "npm run clean && npm run build"
   },
@@ -67,6 +69,10 @@
     "./export": {
       "types": "./dist/export/index.d.ts",
       "import": "./dist/export/index.js"
+    },
+    "./plans": {
+      "types": "./dist/plans/index.d.ts",
+      "import": "./dist/plans/index.js"
     }
   },
   "devDependencies": {
@@ -77,6 +83,6 @@
   "dependencies": {
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
-    "claude-flow": "^2.7.47"
+    "claude-flow": "^3.0.0-alpha.179"
   }
 }

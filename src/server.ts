@@ -45,6 +45,13 @@ import {
   addExecutionLayer,
   finalizeExecutionProof,
 } from './contracts/execution-proof.js';
+import {
+  getPlanService,
+  type CreatePlanRequest,
+  type ApprovePlanRequest,
+  type ExecutionPlan,
+  PlanServiceError,
+} from './plans/index.js';
 
 const PORT = parseInt(process.env.PORT || '8080', 10);
 
@@ -500,6 +507,256 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     }
   }
 
+  // ==========================================================
+  // PLAN API ENDPOINTS
+  // This service is the AUTHORITATIVE source of execution plans.
+  // ==========================================================
+
+  // POST /plans - Create a new execution plan
+  if (method === 'POST' && url === '/plans') {
+    let proofBuilder = createExecutionProof();
+
+    try {
+      const body = await parseBody(req);
+
+      if (!body || body.trim() === '') {
+        const executionProof = finalizeExecutionProof(proofBuilder);
+        sendJSON(res, 400, createErrorResponse(
+          'EMPTY_REQUEST_BODY',
+          'Request body is required and cannot be empty',
+          executionProof
+        ));
+        return;
+      }
+
+      let payload: CreatePlanRequest;
+      try {
+        payload = JSON.parse(body) as CreatePlanRequest;
+      } catch (parseError) {
+        const executionProof = finalizeExecutionProof(proofBuilder);
+        sendJSON(res, 400, createErrorResponse(
+          'INVALID_JSON',
+          'Request body must be valid JSON',
+          executionProof
+        ));
+        return;
+      }
+
+      // Validate required fields
+      if (!payload.execution_profile || !payload.creator) {
+        const executionProof = finalizeExecutionProof(proofBuilder);
+        sendJSON(res, 400, createErrorResponse(
+          'INVALID_REQUEST',
+          'execution_profile and creator are required',
+          executionProof
+        ));
+        return;
+      }
+
+      // Add orchestration layer to proof
+      const orchestrationLayer: ExecutionLayer = {
+        layer_id: `plan-creation-${randomUUID()}`,
+        layer_type: 'ORCHESTRATION',
+        executed_at: new Date().toISOString(),
+        status: 'PASSED',
+        duration_ms: 0,
+        metadata: {
+          operation: 'create_plan',
+        },
+      };
+      proofBuilder = addExecutionLayer(proofBuilder, orchestrationLayer);
+
+      // Create the plan
+      const planService = getPlanService();
+      const result = await planService.createPlan(payload);
+
+      if (!result.success || !result.plan) {
+        const executionProof = finalizeExecutionProof(proofBuilder);
+        sendJSON(res, 500, createErrorResponse(
+          result.error?.code || 'PLAN_CREATION_FAILED',
+          result.error?.message || 'Failed to create plan',
+          executionProof
+        ));
+        return;
+      }
+
+      const executionProof = finalizeExecutionProof(proofBuilder);
+
+      sendJSON(res, 201, {
+        success: true,
+        data: {
+          plan: result.plan,
+          event_emitted: result.event_result?.success ?? false,
+        },
+        version: VERSION,
+        schemaVersion: SCHEMA_VERSION,
+        executionProof,
+        requestId,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+
+    } catch (error) {
+      const executionProof = finalizeExecutionProof(proofBuilder);
+      const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+      const errorCode = error instanceof PlanServiceError ? error.code : 'INTERNAL_ERROR';
+
+      sendJSON(res, 500, createErrorResponse(errorCode, errorMessage, executionProof));
+      return;
+    }
+  }
+
+  // GET /plans - List all plans
+  if (method === 'GET' && url === '/plans') {
+    const executionProof = createReadOnlyExecutionProof('RESOLUTION');
+    const planService = getPlanService();
+    const plans = planService.listPlans();
+
+    sendJSON(res, 200, {
+      success: true,
+      data: {
+        plans,
+        count: plans.length,
+      },
+      version: VERSION,
+      schemaVersion: SCHEMA_VERSION,
+      executionProof,
+      requestId,
+      timestamp: new Date().toISOString(),
+    });
+    return;
+  }
+
+  // GET /plans/:id - Get a specific plan
+  const getPlanMatch = url.match(/^\/plans\/([a-f0-9-]{36})$/);
+  if (method === 'GET' && getPlanMatch) {
+    const planId = getPlanMatch[1];
+    const executionProof = createReadOnlyExecutionProof('RESOLUTION');
+    const planService = getPlanService();
+    const plan = planService.getPlan(planId);
+
+    if (!plan) {
+      sendJSON(res, 404, createErrorResponse(
+        'PLAN_NOT_FOUND',
+        `Plan ${planId} not found`,
+        executionProof
+      ));
+      return;
+    }
+
+    sendJSON(res, 200, {
+      success: true,
+      data: { plan },
+      version: VERSION,
+      schemaVersion: SCHEMA_VERSION,
+      executionProof,
+      requestId,
+      timestamp: new Date().toISOString(),
+    });
+    return;
+  }
+
+  // POST /plans/:id/approve - Approve a plan
+  const approvePlanMatch = url.match(/^\/plans\/([a-f0-9-]{36})\/approve$/);
+  if (method === 'POST' && approvePlanMatch) {
+    const planId = approvePlanMatch[1];
+    let proofBuilder = createExecutionProof();
+
+    try {
+      const body = await parseBody(req);
+
+      if (!body || body.trim() === '') {
+        const executionProof = finalizeExecutionProof(proofBuilder);
+        sendJSON(res, 400, createErrorResponse(
+          'EMPTY_REQUEST_BODY',
+          'Request body is required and cannot be empty',
+          executionProof
+        ));
+        return;
+      }
+
+      let payload: ApprovePlanRequest;
+      try {
+        payload = JSON.parse(body) as ApprovePlanRequest;
+      } catch (parseError) {
+        const executionProof = finalizeExecutionProof(proofBuilder);
+        sendJSON(res, 400, createErrorResponse(
+          'INVALID_JSON',
+          'Request body must be valid JSON',
+          executionProof
+        ));
+        return;
+      }
+
+      // Validate required fields
+      if (!payload.approver) {
+        const executionProof = finalizeExecutionProof(proofBuilder);
+        sendJSON(res, 400, createErrorResponse(
+          'INVALID_REQUEST',
+          'approver is required',
+          executionProof
+        ));
+        return;
+      }
+
+      // Add orchestration layer to proof
+      const orchestrationLayer: ExecutionLayer = {
+        layer_id: `plan-approval-${randomUUID()}`,
+        layer_type: 'ORCHESTRATION',
+        executed_at: new Date().toISOString(),
+        status: 'PASSED',
+        duration_ms: 0,
+        metadata: {
+          operation: 'approve_plan',
+          plan_id: planId,
+        },
+      };
+      proofBuilder = addExecutionLayer(proofBuilder, orchestrationLayer);
+
+      // Approve the plan
+      const planService = getPlanService();
+      const result = await planService.approvePlan(planId, payload);
+
+      if (!result.success || !result.plan) {
+        const executionProof = finalizeExecutionProof(proofBuilder);
+        const statusCode = result.error?.code === 'PLAN_NOT_FOUND' ? 404 :
+                          result.error?.code === 'INVALID_STATUS_TRANSITION' ? 409 : 500;
+
+        sendJSON(res, statusCode, createErrorResponse(
+          result.error?.code || 'PLAN_APPROVAL_FAILED',
+          result.error?.message || 'Failed to approve plan',
+          executionProof
+        ));
+        return;
+      }
+
+      const executionProof = finalizeExecutionProof(proofBuilder);
+
+      sendJSON(res, 200, {
+        success: true,
+        data: {
+          plan: result.plan,
+          event_emitted: result.event_result?.success ?? false,
+          message: 'Plan approved. Ruvector event emitted for execution trigger.',
+        },
+        version: VERSION,
+        schemaVersion: SCHEMA_VERSION,
+        executionProof,
+        requestId,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+
+    } catch (error) {
+      const executionProof = finalizeExecutionProof(proofBuilder);
+      const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+      const errorCode = error instanceof PlanServiceError ? error.code : 'INTERNAL_ERROR';
+
+      sendJSON(res, 500, createErrorResponse(errorCode, errorMessage, executionProof));
+      return;
+    }
+  }
+
   // 404 for unknown routes - still include execution proof
   const executionProof = createReadOnlyExecutionProof('RESOLUTION');
 
@@ -558,4 +815,9 @@ server.listen(PORT, () => {
   console.log(`Health check: http://localhost:${PORT}/`);
   console.log(`API endpoint: http://localhost:${PORT}/v1/intent`);
   console.log(`Validate endpoint: http://localhost:${PORT}/v1/intent/validate`);
+  console.log(`Plans API: http://localhost:${PORT}/plans`);
+  console.log(`  POST /plans - Create execution plan`);
+  console.log(`  GET /plans - List all plans`);
+  console.log(`  GET /plans/:id - Get specific plan`);
+  console.log(`  POST /plans/:id/approve - Approve plan (triggers Ruvector event)`);
 });

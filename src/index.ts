@@ -507,6 +507,58 @@ export {
 } from './synthesis/index.js';
 
 // =============================================================================
+// Plans Module Exports (Authoritative Execution Plan Management)
+// =============================================================================
+
+export type {
+  // Plan types
+  PlanStatus,
+  ExecutionTier,
+  ExecutionMode,
+  ExecutionProfile,
+  PlanMetadata,
+  ApprovalRecord,
+  ExecutionPlan,
+  CreatePlanRequest,
+  ApprovePlanRequest,
+  PlanActorType,
+  // Repository types
+  PlanStorage,
+  // Ruvector types
+  DecisionEventType,
+  DecisionEvent,
+  RuvectorClientConfig,
+  EmitResult,
+  // Service types
+  PlanServiceConfig,
+  CreatePlanResult,
+  ApprovePlanResult,
+} from './plans/index.js';
+
+export {
+  // Type guards
+  isExecutionPlan,
+  isApprovedPlan,
+  // Repository
+  PlanRepository,
+  PlanRepositoryError,
+  getPlanRepository,
+  resetPlanRepository,
+  // Ruvector client
+  RuvectorClient,
+  RuvectorError,
+  DEFAULT_RUVECTOR_CONFIG,
+  getRuvectorClient,
+  resetRuvectorClient,
+  // Service
+  PlanService,
+  PlanServiceError,
+  DEFAULT_SERVICE_CONFIG,
+  getPlanService,
+  resetPlanService,
+} from './plans/index.js';
+
+// =============================================================================
 // Version Information
 // =============================================================================
 
