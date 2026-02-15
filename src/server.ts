@@ -55,6 +55,83 @@ import {
 
 const PORT = parseInt(process.env.PORT || '8080', 10);
 
+// =============================================================================
+// DEPLOYMENT INTENT RESOLUTION — In-memory stores
+// =============================================================================
+
+interface ResolvedIntent {
+  id: string;
+  status: 'resolved';
+  environment: string;
+  approval_required: boolean;
+  target_services: string[];
+  estimated_impact: 'low' | 'medium' | 'high';
+  rollback_plan: { available: boolean; strategy: string };
+  sim_ref: { id: string; type?: string };
+  dry_run: boolean;
+  rollback_on_failure: boolean;
+}
+
+interface Deployment {
+  id: string;
+  intent_id: string;
+  status: 'executing' | 'completed' | 'failed' | 'rolled_back';
+  started_at: string;
+  completed_at?: string;
+  steps_completed: number;
+  total_steps: number;
+}
+
+interface Rollback {
+  id: string;
+  deployment_id: string;
+  status: 'completed';
+  rolled_back_at: string;
+  reason?: string;
+}
+
+const intentStore = new Map<string, ResolvedIntent>();
+const deploymentStore = new Map<string, Deployment>();
+
+/**
+ * Build execution_metadata from request headers
+ */
+function buildExecutionMetadata(req: IncomingMessage): {
+  trace_id: string;
+  timestamp: string;
+  service: string;
+} {
+  const correlationId = req.headers['x-correlation-id'];
+  const traceId = Array.isArray(correlationId)
+    ? correlationId[0]
+    : correlationId || randomUUID();
+  return {
+    trace_id: traceId,
+    timestamp: new Date().toISOString(),
+    service: 'agentics-deployment-intent',
+  };
+}
+
+/**
+ * Derive target services from sim_ref for intent resolution
+ */
+function deriveTargetServices(simRef: { id: string; type?: string }): string[] {
+  const hash = simRef.id.replace(/[^a-z0-9]/gi, '');
+  const serviceA = `service-${hash.substring(0, 4) || 'a'}`;
+  const serviceB = `service-${hash.substring(4, 8) || 'b'}`;
+  return [serviceA, serviceB];
+}
+
+/**
+ * Estimate deployment impact based on environment and services
+ */
+function estimateImpact(environment: string, services: string[]): 'low' | 'medium' | 'high' {
+  if (environment === 'production') return 'high';
+  if (environment === 'staging') return 'medium';
+  if (services.length > 3) return 'medium';
+  return 'low';
+}
+
 /**
  * Contract-compliant API response structure
  *
@@ -223,7 +300,20 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   }
 
   // Health check endpoint (no contract validation needed)
-  if (url === '/' || url === '/health') {
+  if (url === '/health') {
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.end(JSON.stringify({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+    }));
+    return;
+  }
+
+  // Root endpoint — service info
+  if (url === '/') {
     const executionProof = createReadOnlyExecutionProof('RESOLUTION');
 
     sendJSON(res, 200, {
@@ -315,6 +405,269 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
         timestamp: new Date().toISOString(),
       });
       return;
+    }
+
+    // POST /v1/intent — Resolve deployment intent
+    if (method === 'POST' && url === '/v1/intent') {
+      try {
+        const body = await parseBody(req);
+
+        if (!body || body.trim() === '') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            error: { code: 'EMPTY_REQUEST_BODY', message: 'Request body is required' },
+            execution_metadata: buildExecutionMetadata(req),
+          }));
+          return;
+        }
+
+        let payload: {
+          sim_ref: { id: string; type?: string };
+          environment?: string;
+          approval_required?: boolean;
+          dry_run?: boolean;
+          rollback_on_failure?: boolean;
+        };
+        try {
+          payload = JSON.parse(body);
+        } catch {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            error: { code: 'INVALID_JSON', message: 'Request body must be valid JSON' },
+            execution_metadata: buildExecutionMetadata(req),
+          }));
+          return;
+        }
+
+        if (!payload.sim_ref || !payload.sim_ref.id) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            error: { code: 'INVALID_REQUEST', message: 'sim_ref with id is required' },
+            execution_metadata: buildExecutionMetadata(req),
+          }));
+          return;
+        }
+
+        const environment = payload.environment || 'staging';
+        const approvalRequired = payload.approval_required !== false;
+        const targetServices = deriveTargetServices(payload.sim_ref);
+        const impact = estimateImpact(environment, targetServices);
+
+        const resolved: ResolvedIntent = {
+          id: `intent-${randomUUID()}`,
+          status: 'resolved',
+          environment,
+          approval_required: approvalRequired,
+          target_services: targetServices,
+          estimated_impact: impact,
+          rollback_plan: { available: true, strategy: 'blue-green' },
+          sim_ref: payload.sim_ref,
+          dry_run: payload.dry_run ?? false,
+          rollback_on_failure: payload.rollback_on_failure ?? true,
+        };
+
+        intentStore.set(resolved.id, resolved);
+
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'X-Request-Id': requestId,
+        });
+        res.end(JSON.stringify({
+          intent: {
+            id: resolved.id,
+            status: resolved.status,
+            environment: resolved.environment,
+            approval_required: resolved.approval_required,
+            target_services: resolved.target_services,
+            estimated_impact: resolved.estimated_impact,
+            rollback_plan: resolved.rollback_plan,
+          },
+          execution_metadata: buildExecutionMetadata(req),
+        }, null, 2));
+        return;
+
+      } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          error: { code: 'INTERNAL_ERROR', message: error instanceof Error ? error.message : 'Internal server error' },
+          execution_metadata: buildExecutionMetadata(req),
+        }));
+        return;
+      }
+    }
+
+    // POST /v1/intent/execute — Execute a deployment
+    if (method === 'POST' && url === '/v1/intent/execute') {
+      try {
+        const body = await parseBody(req);
+
+        if (!body || body.trim() === '') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            error: { code: 'EMPTY_REQUEST_BODY', message: 'Request body is required' },
+            execution_metadata: buildExecutionMetadata(req),
+          }));
+          return;
+        }
+
+        let payload: { intent_id: string; confirmed: boolean };
+        try {
+          payload = JSON.parse(body);
+        } catch {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            error: { code: 'INVALID_JSON', message: 'Request body must be valid JSON' },
+            execution_metadata: buildExecutionMetadata(req),
+          }));
+          return;
+        }
+
+        if (!payload.intent_id) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            error: { code: 'INVALID_REQUEST', message: 'intent_id is required' },
+            execution_metadata: buildExecutionMetadata(req),
+          }));
+          return;
+        }
+
+        if (!payload.confirmed) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            error: { code: 'NOT_CONFIRMED', message: 'Deployment must be confirmed (confirmed: true)' },
+            execution_metadata: buildExecutionMetadata(req),
+          }));
+          return;
+        }
+
+        const intent = intentStore.get(payload.intent_id);
+        if (!intent) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            error: { code: 'INTENT_NOT_FOUND', message: `Intent ${payload.intent_id} not found` },
+            execution_metadata: buildExecutionMetadata(req),
+          }));
+          return;
+        }
+
+        const deployment: Deployment = {
+          id: `deploy-${randomUUID()}`,
+          intent_id: payload.intent_id,
+          status: 'executing',
+          started_at: new Date().toISOString(),
+          steps_completed: 0,
+          total_steps: 3,
+        };
+
+        deploymentStore.set(deployment.id, deployment);
+
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'X-Request-Id': requestId,
+        });
+        res.end(JSON.stringify({
+          deployment: {
+            id: deployment.id,
+            intent_id: deployment.intent_id,
+            status: deployment.status,
+            started_at: deployment.started_at,
+            steps_completed: deployment.steps_completed,
+            total_steps: deployment.total_steps,
+          },
+          execution_metadata: buildExecutionMetadata(req),
+        }, null, 2));
+        return;
+
+      } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          error: { code: 'INTERNAL_ERROR', message: error instanceof Error ? error.message : 'Internal server error' },
+          execution_metadata: buildExecutionMetadata(req),
+        }));
+        return;
+      }
+    }
+
+    // POST /v1/intent/rollback — Rollback a deployment
+    if (method === 'POST' && url === '/v1/intent/rollback') {
+      try {
+        const body = await parseBody(req);
+
+        if (!body || body.trim() === '') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            error: { code: 'EMPTY_REQUEST_BODY', message: 'Request body is required' },
+            execution_metadata: buildExecutionMetadata(req),
+          }));
+          return;
+        }
+
+        let payload: { deployment_id: string; reason?: string };
+        try {
+          payload = JSON.parse(body);
+        } catch {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            error: { code: 'INVALID_JSON', message: 'Request body must be valid JSON' },
+            execution_metadata: buildExecutionMetadata(req),
+          }));
+          return;
+        }
+
+        if (!payload.deployment_id) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            error: { code: 'INVALID_REQUEST', message: 'deployment_id is required' },
+            execution_metadata: buildExecutionMetadata(req),
+          }));
+          return;
+        }
+
+        const deployment = deploymentStore.get(payload.deployment_id);
+        if (!deployment) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            error: { code: 'DEPLOYMENT_NOT_FOUND', message: `Deployment ${payload.deployment_id} not found` },
+            execution_metadata: buildExecutionMetadata(req),
+          }));
+          return;
+        }
+
+        // Mark deployment as rolled back
+        deployment.status = 'rolled_back';
+        deployment.completed_at = new Date().toISOString();
+
+        const rollback: Rollback = {
+          id: `rollback-${randomUUID()}`,
+          deployment_id: payload.deployment_id,
+          status: 'completed',
+          rolled_back_at: new Date().toISOString(),
+          reason: payload.reason,
+        };
+
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'X-Request-Id': requestId,
+        });
+        res.end(JSON.stringify({
+          rollback: {
+            id: rollback.id,
+            deployment_id: rollback.deployment_id,
+            status: rollback.status,
+            rolled_back_at: rollback.rolled_back_at,
+          },
+          execution_metadata: buildExecutionMetadata(req),
+        }, null, 2));
+        return;
+
+      } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          error: { code: 'INTERNAL_ERROR', message: error instanceof Error ? error.message : 'Internal server error' },
+          execution_metadata: buildExecutionMetadata(req),
+        }));
+        return;
+      }
     }
 
     // POST /v1/intent/validate - Validate a deployment intent
@@ -812,12 +1165,15 @@ server.listen(PORT, () => {
   console.log(`Agentics Deployment Intent API v${VERSION}`);
   console.log(`Server listening on port ${PORT}`);
   console.log(`Contract enforcement: ENABLED (Ajv strict mode)`);
-  console.log(`Health check: http://localhost:${PORT}/`);
-  console.log(`API endpoint: http://localhost:${PORT}/v1/intent`);
-  console.log(`Validate endpoint: http://localhost:${PORT}/v1/intent/validate`);
-  console.log(`Plans API: http://localhost:${PORT}/plans`);
-  console.log(`  POST /plans - Create execution plan`);
-  console.log(`  GET /plans - List all plans`);
-  console.log(`  GET /plans/:id - Get specific plan`);
-  console.log(`  POST /plans/:id/approve - Approve plan (triggers Ruvector event)`);
+  console.log(`Health check: http://localhost:${PORT}/health`);
+  console.log(`Intent API:`);
+  console.log(`  POST /v1/intent          - Resolve deployment intent`);
+  console.log(`  POST /v1/intent/execute  - Execute a deployment`);
+  console.log(`  POST /v1/intent/rollback - Rollback a deployment`);
+  console.log(`  POST /v1/intent/validate - Validate intent (contract-enforced)`);
+  console.log(`Plans API:`);
+  console.log(`  POST /plans              - Create execution plan`);
+  console.log(`  GET  /plans              - List all plans`);
+  console.log(`  GET  /plans/:id          - Get specific plan`);
+  console.log(`  POST /plans/:id/approve  - Approve plan`);
 });
