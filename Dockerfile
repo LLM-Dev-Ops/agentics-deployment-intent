@@ -1,23 +1,28 @@
-FROM node:20-bookworm-slim
-
-# Install Python and build tools for native dependencies
-RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
 COPY package*.json ./
 
-RUN npm install
+RUN npm ci
 
-COPY . .
+COPY tsconfig.json ./
+COPY src ./src
 
 RUN npm run build
 
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm ci --omit=dev
+
+COPY --from=builder /app/dist ./dist
+
+ENV NODE_ENV=production
 ENV PORT=8080
 EXPOSE 8080
 
-CMD ["npm", "start"]
+CMD ["node", "dist/server.js"]
